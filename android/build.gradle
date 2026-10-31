@@ -4,8 +4,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.1'
-        classpath 'com.google.gms:google-services:4.4.2' // 👈 ADICIONADO AQUI
+        // Atualizado de 8.2.1 para 8.9.1
+        classpath 'com.android.tools.build:gradle:8.9.1'
+        
+        // Plugin do Google Services (necessário para o Push Notification)
+        classpath 'com.google.gms:google-services:4.4.2'
     }
 }
 
