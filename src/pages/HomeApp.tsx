@@ -6,34 +6,51 @@ export default function HomeApp() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #eef2f7 0%, #dbe6f3 100%)",
-      display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", padding: "24px", fontFamily: "'Segoe UI', system-ui, sans-serif"
+      width: "100vw",
+      // O fundo agora é a imagem vertical. 
+      // Você precisará salvar a imagem como 'home-bg.jpg' na pasta 'public' do projeto.
+      backgroundImage: "url('/home-bg.jpg')", 
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "flex-end", // Joga os botões para a parte de baixo
+      padding: "40px 24px 60px", // Espaço extra embaixo para não colar na borda
+      fontFamily: "'Segoe UI', system-ui, sans-serif",
+      boxSizing: "border-box"
     }}>
-      <img src="/logo-ijp.png" alt="IJP" style={{ width: 140, height: 140, objectFit: "contain", marginBottom: 16 }} />
-      <h1 style={{ color: "#1a2a4f", fontSize: 28, margin: 0, textAlign: "center" }}>
-        Instituto Jovens<br/>Periféricos
-      </h1>
-      <p style={{ color: "#6b7a8f", marginTop: 8, marginBottom: 40, textAlign: "center", fontSize: 15 }}>
-        Transformando vidas através da educação.
-      </p>
+      
+      {/* A logo não é mais necessária aqui no código, pois já está na imagem de fundo */}
 
-      <button onClick={() => navigate("/publico")} style={{
-        width: "100%", maxWidth: 340, padding: "16px", background: "#fff", color: "#1a2a4f",
-        border: "2px solid #1a2a4f", borderRadius: 12, fontSize: 16, fontWeight: 700, marginBottom: 16,
-        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-      }}>
-        🌍 CONHECER O IJP
-      </button>
+      {/* Container dos Botões */}
+      <div style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 16 }}>
+        
+        <button onClick={() => navigate("/publico")} style={{
+          width: "100%", padding: "16px", 
+          background: "rgba(255, 255, 255, 0.9)", // Branco translúcido
+          color: "#1a2a4f",
+          border: "2px solid #1a2a4f", borderRadius: 12, fontSize: 16, fontWeight: 700,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          backdropFilter: "blur(4px)" // Efeito de vidro
+        }}>
+          🌍 CONHECER O IJP
+        </button>
 
-      <button onClick={() => navigate("/portal")} style={{
-        width: "100%", maxWidth: 340, padding: "16px", background: "#1a2a4f", color: "#fff",
-        border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700,
-        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        boxShadow: "0 4px 12px rgba(26,42,79,0.2)"
-      }}>
-        🎓 SOU ALUNO
-      </button>
+        <button onClick={() => navigate("/portal")} style={{
+          width: "100%", padding: "16px", 
+          background: "rgba(26, 42, 79, 0.95)", // Azul escuro translúcido
+          color: "#fff",
+          border: "none", borderRadius: 12, fontSize: 16, fontWeight: 700,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          backdropFilter: "blur(4px)"
+        }}>
+          🎓 SOU ALUNO
+        </button>
+
+      </div>
     </div>
   );
 }

@@ -28,6 +28,7 @@ export default function Layout() {
     { path: "/saude", label: "Saúde", icon: "🏥" },
     { path: "/atestados", label: "Atestados", icon: "📄" },
     { path: "/certificados", label: "Certificados", icon: "📜" },
+    { path: "/admin/comunicados", label: "Comunicação", icon: "📢" }, // 👈 NOVO ITEM AQUI
     { path: "/pre-inscricoes", label: "Pré-inscrições", icon: "📝" },
     { path: "/matriculas-turma", label: "Matrículas", icon: "📋" },
   ];

@@ -10,6 +10,7 @@ import {
   urlValidacao,
 } from "../services/certificados";
 import type { ProfessorCertificado } from "../services/certificados";
+import { inicializarNotificacoes } from "../services/notificacoes";
 
 // ============ Helpers ============
 const apenasDigitos = (s: string) => (s || "").replace(/\D/g, "");
@@ -96,6 +97,14 @@ interface CursoMatriculado {
   status?: string;
 }
 
+interface Material {
+  id: string;
+  titulo: string;
+  arquivoUrl: string;
+  arquivoNome: string;
+  arquivoTipo: string;
+}
+
 // ============ Componente ============
 export default function PortalAluno() {
   const [cpf, setCpf] = useState("");
@@ -109,9 +118,8 @@ export default function PortalAluno() {
   const [certificados, setCertificados] = useState<Certificado[]>([]);
   const [agendamentos, setAgendamentos] = useState<Agendamento[]>([]);
   const [cursos, setCursos] = useState<CursoMatriculado[]>([]);
-  const [abaAtiva, setAbaAtiva] = useState<"certificados" | "agenda" | "cursos">(
-    "certificados"
-  );
+  const [materiais, setMateriais] = useState<Material[]>([]);
+  const [abaAtiva, setAbaAtiva] = useState<"certificados" | "agenda" | "cursos" | "materiais">("certificados");
 
   useEffect(() => {
     const salvo = sessionStorage.getItem("portalAluno");
@@ -129,6 +137,7 @@ export default function PortalAluno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aluno]);
 
+  // ============ Login ============
   const buscarAluno = async () => {
     setErro("");
     const cpfDig = apenasDigitos(cpf);
@@ -170,6 +179,10 @@ export default function PortalAluno() {
       }
 
       setAluno(encontrado);
+      
+      // 👈 INICIA AS NOTIFICAÇÕES APÓS O LOGIN
+      await inicializarNotificacoes(encontrado.id);
+      
     } catch (e) {
       console.error(e);
       setErro("Erro ao consultar. Tente novamente em instantes.");
@@ -178,12 +191,14 @@ export default function PortalAluno() {
     }
   };
 
+  // ============ Carregar Dados ============
   const carregarDados = async (a: Aluno) => {
     setCarregando(true);
     try {
       const cursosSnap = await getDocs(collection(db, "cursos"));
       const certificadosEncontrados: Certificado[] = [];
       const cursosEncontrados: CursoMatriculado[] = [];
+      const materiaisEncontrados: Material[] = [];
       const hojeISO = new Date().toISOString().slice(0, 10);
 
       for (const cursoDoc of cursosSnap.docs) {
@@ -217,7 +232,6 @@ export default function PortalAluno() {
             );
           }
 
-          // Gera/recupera certificado automaticamente se aprovado
           if (totalAulas > 0 && frequencia >= 70) {
             try {
               const { codigo } = await obterOuCriarCertificado({
@@ -247,7 +261,6 @@ export default function PortalAluno() {
             }
           }
 
-          // Só mostra em "Cursos" se ainda está ativo
           const isAtivo =
             statusTurma === "ativa" && (!dataFimISO || dataFimISO >= hojeISO);
 
@@ -263,6 +276,21 @@ export default function PortalAluno() {
               status: statusTurma,
             });
           }
+
+          // Busca materiais da turma
+          const matSnap = await getDocs(
+            query(collection(db, "materiais"), where("turmaId", "==", turmaDoc.id))
+          );
+          matSnap.docs.forEach((d) => {
+            const m = d.data();
+            materiaisEncontrados.push({
+              id: d.id,
+              titulo: m.titulo,
+              arquivoUrl: m.arquivoUrl,
+              arquivoNome: m.arquivoNome,
+              arquivoTipo: m.arquivoTipo,
+            });
+          });
         }
       }
 
@@ -274,6 +302,7 @@ export default function PortalAluno() {
 
       setCertificados(certificadosEncontrados);
       setCursos(cursosEncontrados);
+      setMateriais(materiaisEncontrados);
 
       try {
         const agSnap = await getDocs(
@@ -322,8 +351,10 @@ export default function PortalAluno() {
     setCertificados([]);
     setAgendamentos([]);
     setCursos([]);
+    setMateriais([]);
   };
 
+  // ============ Baixar PDF ============
   const baixarPDF = async (cert: Certificado) => {
     if (!aluno) return;
     setBaixando(cert.codigo);
@@ -439,9 +470,7 @@ export default function PortalAluno() {
             <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6 }}>
               <strong>Que alegria ter você por aqui!</strong>
               <br />
-              Sua dedicação e sua trajetória merecem ser celebradas. Neste espaço
-              você pode acessar seus certificados, conferir seus próximos
-              atendimentos e acompanhar seus cursos no Instituto Jovens Periféricos.
+              Sua dedicação e sua trajetória merecem ser celebradas. Acesse seus certificados, atendimentos, cursos e materiais.
             </p>
           </div>
 
@@ -475,17 +504,7 @@ export default function PortalAluno() {
             />
 
             {erro && (
-              <div
-                style={{
-                  background: "#fff3cd",
-                  border: "1px solid #ffeeba",
-                  color: "#856404",
-                  borderRadius: 8,
-                  padding: 12,
-                  marginBottom: 12,
-                  fontSize: 14,
-                }}
-              >
+              <div style={{ background: "#fff3cd", border: "1px solid #ffeeba", color: "#856404", borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 14 }}>
                 {erro}
               </div>
             )}
@@ -493,26 +512,10 @@ export default function PortalAluno() {
             <button
               onClick={buscarAluno}
               disabled={carregando}
-              style={{
-                ...estilos.botao,
-                opacity: carregando ? 0.7 : 1,
-                cursor: carregando ? "wait" : "pointer",
-              }}
+              style={{ ...estilos.botao, opacity: carregando ? 0.7 : 1, cursor: carregando ? "wait" : "pointer" }}
             >
               {carregando ? "Consultando..." : "🔎 Encontrar meus dados"}
             </button>
-
-            <p
-              style={{
-                fontSize: 12,
-                color: "#8a99ad",
-                textAlign: "center",
-                marginTop: 16,
-              }}
-            >
-              🔒 Seus dados estão protegidos. Usamos 3 informações para confirmar
-              sua identidade.
-            </p>
           </div>
         </div>
       </div>
@@ -521,122 +524,70 @@ export default function PortalAluno() {
 
   return (
     <div style={estilos.wrapper}>
-      <div style={{ ...estilos.card, maxWidth: 780 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 8,
-          }}
-        >
+      <div style={{ ...estilos.card, maxWidth: 960 }}> {/* 👈 AQUI ESTÁ O 960 QUE VOCÊ PEDIU */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
-            <h2 style={{ margin: 0, color: "#1a2a4f" }}>
-              Olá, {aluno.nomeCompleto.split(" ")[0]} 👋
-            </h2>
-            <p style={{ margin: "4px 0 0", color: "#6b7a8f", fontSize: 13 }}>
-              {aluno.nomeCompleto}
-            </p>
+            <h2 style={{ margin: 0, color: "#1a2a4f" }}>Olá, {aluno.nomeCompleto.split(" ")[0]} 👋</h2>
+            <p style={{ margin: "4px 0 0", color: "#6b7a8f", fontSize: 13 }}>{aluno.nomeCompleto}</p>
           </div>
-          <button onClick={sair} style={estilos.botaoSair}>
-            Sair
-          </button>
+          <button onClick={sair} style={estilos.botaoSair}>Sair</button>
         </div>
 
         <div style={estilos.abas}>
-          <AbaBtn
-            ativo={abaAtiva === "certificados"}
-            onClick={() => setAbaAtiva("certificados")}
-          >
-            📜 Certificados {certificados.length > 0 && `(${certificados.length})`}
+          <AbaBtn ativo={abaAtiva === "certificados"} onClick={() => setAbaAtiva("certificados")}>
+            📜 Certificados ({certificados.length})
           </AbaBtn>
-          <AbaBtn
-            ativo={abaAtiva === "agenda"}
-            onClick={() => setAbaAtiva("agenda")}
-          >
-            📅 Atendimentos {agendamentos.length > 0 && `(${agendamentos.length})`}
+          <AbaBtn ativo={abaAtiva === "agenda"} onClick={() => setAbaAtiva("agenda")}>
+            📅 Atendimentos ({agendamentos.length})
           </AbaBtn>
-          <AbaBtn
-            ativo={abaAtiva === "cursos"}
-            onClick={() => setAbaAtiva("cursos")}
-          >
-            📚 Cursos {cursos.length > 0 && `(${cursos.length})`}
+          <AbaBtn ativo={abaAtiva === "cursos"} onClick={() => setAbaAtiva("cursos")}>
+            📚 Cursos ({cursos.length})
+          </AbaBtn>
+          <AbaBtn ativo={abaAtiva === "materiais"} onClick={() => setAbaAtiva("materiais")}>
+            📂 Materiais ({materiais.length})
           </AbaBtn>
         </div>
 
-        {carregando && (
-          <p style={{ textAlign: "center", color: "#6b7a8f", padding: 20 }}>
-            Carregando suas informações...
-          </p>
+        {carregando && <p style={{ textAlign: "center", color: "#6b7a8f", padding: 20 }}>Carregando...</p>}
+
+        {/* ABA DE MATERIAIS */}
+        {!carregando && abaAtiva === "materiais" && (
+          <div>
+            {materiais.length === 0 ? (
+              <Vazio emoji="📂" titulo="Nenhum material disponível" texto="Quando a equipe enviar apostilas, elas aparecerão aqui." />
+            ) : (
+              materiais.map((m) => (
+                <div key={m.id} style={estilos.item}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}>{m.titulo}</div>
+                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>{m.arquivoNome}</div>
+                  </div>
+                  <a href={m.arquivoUrl} target="_blank" rel="noreferrer" style={{ padding: "10px 16px", background: "#1a2a4f", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 13 }}>
+                    ⬇️ Baixar
+                  </a>
+                </div>
+              ))
+            )}
+          </div>
         )}
 
+        {/* ABA DE CERTIFICADOS */}
         {!carregando && abaAtiva === "certificados" && (
           <div>
             {certificados.length === 0 ? (
-              <Vazio
-                emoji="📜"
-                titulo="Nenhum certificado disponível ainda"
-                texto="Quando você concluir os requisitos de um curso, seu certificado aparecerá aqui automaticamente."
-              />
+              <Vazio emoji="📜" titulo="Nenhum certificado disponível" texto="Conclua um curso para desbloquear." />
             ) : (
               certificados.map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    ...estilos.item,
-                    flexDirection: "column",
-                    alignItems: "stretch",
-                  }}
-                >
+                <div key={c.id} style={{ ...estilos.item, flexDirection: "column", alignItems: "stretch" }}>
                   <div>
-                    <div
-                      style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}
-                    >
-                      {c.cursoNome}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>
-                      {c.cargaHoraria}h
-                      {c.frequencia != null &&
-                        ` • ${c.frequencia}% de frequência`}
-                      {c.dataFim && ` • Concluído em ${formatarData(c.dataFim)}`}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#8a99ad",
-                        marginTop: 4,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      Código: {c.codigo}
-                    </div>
+                    <div style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}>{c.cursoNome}</div>
+                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>{c.cargaHoraria}h • {c.frequencia}% frequência</div>
                   </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      marginTop: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      onClick={() =>
-                        window.open(`/certificado/${c.codigo}`, "_blank")
-                      }
-                      style={estilos.botaoAcaoSec}
-                    >
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button onClick={() => window.open(`/certificado/${c.codigo}`, "_blank")} style={estilos.botaoAcaoSec}>
                       👁️ Visualizar
                     </button>
-                    <button
-                      onClick={() => baixarPDF(c)}
-                      disabled={baixando === c.codigo}
-                      style={{
-                        ...estilos.botaoAcao,
-                        opacity: baixando === c.codigo ? 0.6 : 1,
-                        cursor: baixando === c.codigo ? "wait" : "pointer",
-                      }}
-                    >
+                    <button onClick={() => baixarPDF(c)} disabled={baixando === c.codigo} style={estilos.botaoAcao}>
                       {baixando === c.codigo ? "Gerando..." : "⬇️ Baixar PDF"}
                     </button>
                   </div>
@@ -646,43 +597,17 @@ export default function PortalAluno() {
           </div>
         )}
 
+        {/* ABA DE AGENDAMENTOS */}
         {!carregando && abaAtiva === "agenda" && (
           <div>
             {agendamentos.length === 0 ? (
-              <Vazio
-                emoji="📅"
-                titulo="Nenhum atendimento futuro"
-                texto="Você não tem atendimentos marcados. Quando houver, aparecerão aqui."
-              />
+              <Vazio emoji="📅" titulo="Nenhum atendimento" texto="Você não tem atendimentos marcados." />
             ) : (
               agendamentos.map((ag) => (
                 <div key={ag.id} style={estilos.item}>
                   <div style={{ flex: 1 }}>
-                    <div
-                      style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 15 }}
-                    >
-                      {formatarData(ag.data)} às {ag.horario}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>
-                      {ag.nomeProfissional || "Profissional"}
-                      {ag.especialidade && ` • ${ag.especialidade}`}
-                    </div>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: 6,
-                        padding: "2px 10px",
-                        borderRadius: 999,
-                        background:
-                          ag.status === "realizado" ? "#d4edda" : "#e6f0ff",
-                        color:
-                          ag.status === "realizado" ? "#155724" : "#1a2a4f",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {ag.status === "realizado" ? "Realizado" : "Agendado"}
-                    </span>
+                    <div style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 15 }}>{formatarData(ag.data)} às {ag.horario}</div>
+                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>{ag.nomeProfissional || "Profissional"}</div>
                   </div>
                 </div>
               ))
@@ -690,91 +615,43 @@ export default function PortalAluno() {
           </div>
         )}
 
+        {/* ABA DE CURSOS */}
         {!carregando && abaAtiva === "cursos" && (
           <div>
             {cursos.length === 0 ? (
-              <Vazio
-                emoji="📚"
-                titulo="Nenhum curso ativo no momento"
-                texto="Seus cursos concluídos aparecem na aba de certificados."
-              />
+              <Vazio emoji="📚" titulo="Nenhum curso ativo" texto="Seus cursos concluídos aparecem em certificados." />
             ) : (
               cursos.map((c) => (
                 <div key={`${c.cursoId}-${c.turmaId}`} style={estilos.item}>
                   <div style={{ flex: 1 }}>
-                    <div
-                      style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}
-                    >
-                      {c.cursoNome}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>
-                      Turma: {c.turmaNome}
-                      {c.cargaHoraria && ` • ${c.cargaHoraria}h`}
-                    </div>
-                    {(c.dataInicio || c.dataFim) && (
-                      <div
-                        style={{ fontSize: 12, color: "#8a99ad", marginTop: 4 }}
-                      >
-                        {c.dataInicio && `Início: ${formatarData(c.dataInicio)}`}
-                        {c.dataFim && ` • Término: ${formatarData(c.dataFim)}`}
-                      </div>
-                    )}
+                    <div style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}>{c.cursoNome}</div>
+                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>Turma: {c.turmaNome}</div>
                   </div>
-                  <span
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: 999,
-                      background: "#e6f0ff",
-                      color: "#1a2a4f",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    ativa
-                  </span>
                 </div>
               ))
             )}
           </div>
         )}
-
-        <p
-          style={{
-            textAlign: "center",
-            color: "#8a99ad",
-            fontSize: 12,
-            marginTop: 24,
-          }}
-        >
-          Precisa de ajuda? Fale com o Instituto Jovens Periféricos.
-        </p>
       </div>
     </div>
   );
 }
 
-function AbaBtn({
-  ativo,
-  onClick,
-  children,
-}: {
-  ativo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+// Componentes Auxiliares
+function AbaBtn({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       style={{
         flex: 1,
-        padding: "10px 14px",
+        padding: "10px 8px",
         border: "none",
         background: ativo ? "#1a2a4f" : "#f4f6f9",
         color: ativo ? "#fff" : "#33415c",
         borderRadius: 10,
         cursor: "pointer",
         fontWeight: 600,
-        fontSize: 13,
+        fontSize: 12,
         transition: "all 0.15s",
       }}
     >
@@ -783,43 +660,17 @@ function AbaBtn({
   );
 }
 
-function Vazio({
-  emoji,
-  titulo,
-  texto,
-}: {
-  emoji: string;
-  titulo: string;
-  texto: string;
-}) {
+function Vazio({ emoji, titulo, texto }: { emoji: string; titulo: string; texto: string }) {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "40px 20px",
-        background: "#fafbfd",
-        borderRadius: 12,
-        border: "1px dashed #e0e4e8",
-      }}
-    >
+    <div style={{ textAlign: "center", padding: "40px 20px", background: "#fafbfd", borderRadius: 12, border: "1px dashed #e0e4e8" }}>
       <div style={{ fontSize: 42, marginBottom: 8 }}>{emoji}</div>
-      <div style={{ fontWeight: 700, color: "#1a2a4f", marginBottom: 4 }}>
-        {titulo}
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          color: "#6b7a8f",
-          maxWidth: 400,
-          margin: "0 auto",
-        }}
-      >
-        {texto}
-      </div>
+      <div style={{ fontWeight: 700, color: "#1a2a4f", marginBottom: 4 }}>{titulo}</div>
+      <div style={{ fontSize: 13, color: "#6b7a8f", maxWidth: 400, margin: "0 auto" }}>{texto}</div>
     </div>
   );
 }
 
+// Estilos
 const estilos: Record<string, React.CSSProperties> = {
   wrapper: {
     minHeight: "100vh",
@@ -835,12 +686,7 @@ const estilos: Record<string, React.CSSProperties> = {
     padding: 32,
     boxShadow: "0 10px 40px rgba(26,42,79,0.08)",
   },
-  titulo: {
-    color: "#1a2a4f",
-    margin: "12px 0 4px",
-    fontSize: 24,
-    letterSpacing: "0.3px",
-  },
+  titulo: { color: "#1a2a4f", margin: "12px 0 4px", fontSize: 24, letterSpacing: "0.3px" },
   subtitulo: { color: "#6b7a8f", fontSize: 13, margin: 0 },
   mensagem: {
     background: "linear-gradient(135deg, #eef2f7 0%, #e6f0ff 100%)",
@@ -849,13 +695,7 @@ const estilos: Record<string, React.CSSProperties> = {
     color: "#1a2a4f",
     border: "1px solid #dbe6f3",
   },
-  label: {
-    display: "block",
-    fontWeight: 600,
-    color: "#1a2a4f",
-    marginBottom: 6,
-    fontSize: 13,
-  },
+  label: { display: "block", fontWeight: 600, color: "#1a2a4f", marginBottom: 6, fontSize: 13 },
   input: {
     width: "100%",
     padding: 12,
@@ -888,7 +728,7 @@ const estilos: Record<string, React.CSSProperties> = {
   },
   abas: {
     display: "flex",
-    gap: 8,
+    gap: 4,
     margin: "20px 0 16px",
     padding: 4,
     background: "#f4f6f9",

@@ -47,8 +47,10 @@ import AdminMigrarProntuarios from "./pages/AdminMigrarProntuarios";
 // Importações Públicas / Aluno
 import ValidarCertificado from "./pages/ValidarCertificado";
 import PortalAluno from "./pages/PortalAluno";
-import HomeApp from "./pages/HomeApp"; // Nova tela inicial
-import AreaPublica from "./pages/AreaPublica"; // Nova área pública
+import HomeApp from "./pages/HomeApp";
+import AreaPublica from "./pages/AreaPublica";
+import MuralAvisos from "./pages/MuralAvisos";
+import AdminComunicados from "./pages/AdminComunicados";
 
 export default function App() {
   const isApp = Capacitor.isNativePlatform();
@@ -63,6 +65,7 @@ export default function App() {
         <Route path="/publico" element={<AreaPublica />} />
         <Route path="/portal" element={<PortalAluno />} />
         <Route path="/portal-aluno" element={<PortalAluno />} />
+        <Route path="/avisos" element={<MuralAvisos />} />
         <Route path="/certificado" element={<ValidarCertificado />} />
         <Route path="/certificado/:codigo" element={<ValidarCertificado />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -118,6 +121,7 @@ export default function App() {
         </Route>
         <Route path="/atestados" element={<Atestados />} />
         <Route path="/admin/migrar-prontuarios" element={<AdminMigrarProntuarios />} />
+        <Route path="/admin/comunicados" element={<AdminComunicados />} />
         <Route path="/migracao-psicologia" element={<MigracaoPsicologia />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/relatorio-alunos" element={<RelatorioAlunosTurma />} />

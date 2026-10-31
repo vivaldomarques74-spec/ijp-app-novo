@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "698456103004",
+    "project_id": "ijp-web",
+    "storage_bucket": "ijp-web.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:698456103004:android:dadc5e6cefac71027eae99",
+        "android_client_info": {
+          "package_name": "br.org.ijp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClaS3htKiOAyewBnXgkhQPMHBNZajbXbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
