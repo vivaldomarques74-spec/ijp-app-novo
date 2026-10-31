@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Instituto Jovens Periféricos</string>
+    <string name="title_activity_main">Instituto Jovens Periféricos</string>
+    <string name="package_name">br.org.ijp.app</string>
+    <string name="custom_url_scheme">br.org.ijp.app</string>
+</resources>

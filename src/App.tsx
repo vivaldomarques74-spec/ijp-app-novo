@@ -1,7 +1,9 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
+
+// Importações Admin
 import Layout from "./layout/Layout";
 import PrivateRoute from "./auth/PrivateRoute";
-
 import Dashboard from "./pages/Dashboard";
 import Cursos from "./pages/Cursos";
 import CursoNovo from "./pages/CursoNovo";
@@ -13,7 +15,6 @@ import AlunosLista from "./pages/AlunosLista";
 import AlunosCadastrar from "./pages/AlunosCadastrar";
 import AlunosEditar from "./pages/AlunosEditar";
 import Login from "./pages/Login";
-
 import Saude from "./pages/Saude";
 import SaudeFila from "./pages/SaudeFila";
 import SaudeAgenda from "./pages/SaudeAgenda";
@@ -21,14 +22,12 @@ import SaudeProfissionais from "./pages/SaudeProfissionais";
 import SaudePacientes from "./pages/SaudePacientes";
 import SaudeConfiguracoes from "./pages/SaudeConfiguracoes";
 import SaudeFilaOrdemChegada from "./pages/SaudeFilaOrdemChegada";
-
 import LoginProfissional from "./pages/LoginProfissional";
 import CadastrarSenhaProfissional from "./pages/CadastrarSenhaProfissional";
 import ProfissionalLayout from "./layout/ProfissionalLayout";
 import ProfissionalAgenda from "./pages/ProfissionalAgenda";
 import ProfissionalProntuario from "./pages/ProfissionalProntuario";
 import ProfissionalPacientes from "./pages/ProfissionalPacientes";
-
 import MigracaoPsicologia from "./pages/MigracaoPsicologia";
 import Notificacoes from "./pages/Notificacoes";
 import RelatorioAlunosTurma from "./pages/RelatorioAlunosTurma";
@@ -41,52 +40,63 @@ import PreInscricoes from "./pages/PreInscricoes";
 import MatriculasTurma from "./pages/MatriculasTurma";
 import AdminUnificacao from "./pages/AdminUnificacao";
 import AdminRestaurarAlunos from "./pages/AdminRestaurarAlunos";
-
 import Atestados from "./pages/Atestados";
 import ValidarAtestado from "./pages/ValidarAtestado";
 import AdminMigrarProntuarios from "./pages/AdminMigrarProntuarios";
 
-// ============ CERTIFICADOS + PORTAL PÚBLICO ============
+// Importações Públicas / Aluno
 import ValidarCertificado from "./pages/ValidarCertificado";
 import PortalAluno from "./pages/PortalAluno";
+import HomeApp from "./pages/HomeApp"; // Nova tela inicial
+import AreaPublica from "./pages/AreaPublica"; // Nova área pública
 
 export default function App() {
+  const isApp = Capacitor.isNativePlatform();
+
+  // ==========================================
+  // ROTAS DO APLICATIVO (Móvel)
+  // ==========================================
+  if (isApp) {
+    return (
+      <Routes>
+        <Route path="/" element={<HomeApp />} />
+        <Route path="/publico" element={<AreaPublica />} />
+        <Route path="/portal" element={<PortalAluno />} />
+        <Route path="/portal-aluno" element={<PortalAluno />} />
+        <Route path="/certificado" element={<ValidarCertificado />} />
+        <Route path="/certificado/:codigo" element={<ValidarCertificado />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
+
+  // ==========================================
+  // ROTAS WEB (Sistema Completo)
+  // ==========================================
   return (
     <Routes>
-      {/* ============ ROTAS PÚBLICAS (sem login) ============ */}
+      {/* ROTAS PÚBLICAS */}
       <Route path="/login" element={<Login />} />
       <Route path="/acesso-profissional" element={<LoginProfissional />} />
       <Route path="/cadastrar-senha" element={<CadastrarSenhaProfissional />} />
       <Route path="/presenca-professor" element={<PresencaProfessor />} />
       <Route path="/inscricao" element={<Inscricao />} />
-
-      {/* Validação de atestados */}
       <Route path="/validar" element={<ValidarAtestado />} />
       <Route path="/validar/:codigo" element={<ValidarAtestado />} />
-
-      {/* Validação de certificados (pública) */}
       <Route path="/certificado" element={<ValidarCertificado />} />
       <Route path="/certificado/:codigo" element={<ValidarCertificado />} />
-
-      {/* Portal do aluno (público) */}
       <Route path="/portal" element={<PortalAluno />} />
       <Route path="/portal-aluno" element={<PortalAluno />} />
 
-      {/* ============ ÁREA DO PROFISSIONAL ============ */}
+      {/* ÁREA DO PROFISSIONAL */}
       <Route path="/profissional/:codigo" element={<ProfissionalLayout />}>
         <Route path="agenda" element={<ProfissionalAgenda />} />
         <Route path="paciente/:alunoId" element={<ProfissionalProntuario />} />
         <Route path="pacientes" element={<ProfissionalPacientes />} />
       </Route>
 
-      {/* ============ ROTAS ADMINISTRATIVAS (com login) ============ */}
-      <Route
-        element={
-          <PrivateRoute>
-            <Layout />
-          </PrivateRoute>
-        }
-      >
+      {/* ROTAS ADMINISTRATIVAS */}
+      <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/alunos" element={<AlunosLista />} />
         <Route path="/alunos/cadastrar" element={<AlunosCadastrar />} />
@@ -97,7 +107,6 @@ export default function App() {
         <Route path="/cursos/:id/turmas/:turmaId" element={<EditarTurma />} />
         <Route path="/professores" element={<Professores />} />
         <Route path="/presenca" element={<Presenca />} />
-
         <Route path="/saude" element={<Saude />}>
           <Route index element={<SaudeFila />} />
           <Route path="fila" element={<SaudeFila />} />
@@ -107,19 +116,12 @@ export default function App() {
           <Route path="pacientes" element={<SaudePacientes />} />
           <Route path="configuracoes" element={<SaudeConfiguracoes />} />
         </Route>
-
         <Route path="/atestados" element={<Atestados />} />
-        <Route
-          path="/admin/migrar-prontuarios"
-          element={<AdminMigrarProntuarios />}
-        />
+        <Route path="/admin/migrar-prontuarios" element={<AdminMigrarProntuarios />} />
         <Route path="/migracao-psicologia" element={<MigracaoPsicologia />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/relatorio-alunos" element={<RelatorioAlunosTurma />} />
-        <Route
-          path="/migracao-corrigir-horarios"
-          element={<MigracaoCorrigirHorarios />}
-        />
+        <Route path="/migracao-corrigir-horarios" element={<MigracaoCorrigirHorarios />} />
         <Route path="/certificados" element={<Certificados />} />
         <Route path="/teste-certificado" element={<TesteCertificado />} />
         <Route path="/pre-inscricoes" element={<PreInscricoes />} />
