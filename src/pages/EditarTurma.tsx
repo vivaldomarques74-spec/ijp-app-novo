@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, updateDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, addDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../services/firebase";
 
 interface Professor {
@@ -15,8 +15,11 @@ interface Professor {
 export default function EditarTurma() {
   const { id: cursoId, turmaId } = useParams<{ id: string; turmaId: string }>();
   const navigate = useNavigate();
+  
+  // 👇 A MÁGICA ACONTECE AQUI: Identifica se é nova ou edição
+  const isNovaTurma = turmaId === "nova";
 
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(!isNovaTurma);
   const [salvando, setSalvando] = useState(false);
   const [alunos, setAlunos] = useState<string[]>([]);
   const [camposExtras, setCamposExtras] = useState<Record<string, any>>({});
@@ -27,7 +30,7 @@ export default function EditarTurma() {
 
   const [form, setForm] = useState({
     nome: "",
-    vagasTotais: 0,
+    vagasTotais: 30,
     cargaHoraria: 0,
     totalAulas: 0,
     status: "ativa",
@@ -40,7 +43,10 @@ export default function EditarTurma() {
   });
 
   useEffect(() => {
-    carregar();
+    // 👇 Só busca no banco se NÃO for uma nova turma
+    if (!isNovaTurma) {
+      carregar();
+    }
     carregarProfessores();
   }, [cursoId, turmaId]);
 
@@ -69,7 +75,6 @@ export default function EditarTurma() {
       const alunosArr = data.alunos || [];
       setAlunos(alunosArr);
 
-      // Carrega professores vinculados
       setProfessoresSelecionados(data.professoresIds || []);
 
       const capacidade =
@@ -120,7 +125,7 @@ export default function EditarTurma() {
 
     setSalvando(true);
     try {
-      const updateData: any = {
+      const dadosSalvar: any = {
         ...camposExtras,
         nome: form.nome,
         vagasTotais: form.vagasTotais,
@@ -135,11 +140,22 @@ export default function EditarTurma() {
         updatedAt: new Date(),
       };
 
-      if (form.dataInicio) updateData.dataInicio = new Date(form.dataInicio);
-      if (form.dataFim) updateData.dataFim = new Date(form.dataFim);
+      if (form.dataInicio) dadosSalvar.dataInicio = new Date(form.dataInicio);
+      if (form.dataFim) dadosSalvar.dataFim = new Date(form.dataFim);
 
-      await updateDoc(doc(db, "cursos", cursoId, "turmas", turmaId), updateData);
-      alert("Turma atualizada!");
+      // 👇 AQUI ELE DECIDE SE CRIA OU SE ATUALIZA
+      if (isNovaTurma) {
+        await addDoc(collection(db, "cursos", cursoId, "turmas"), {
+          ...dadosSalvar,
+          alunos: [],
+          createdAt: new Date(),
+        });
+        alert("Turma criada com sucesso!");
+      } else {
+        await updateDoc(doc(db, "cursos", cursoId, "turmas", turmaId), dadosSalvar);
+        alert("Turma atualizada!");
+      }
+      
       navigate(`/cursos/${cursoId}`);
     } catch (e: any) {
       alert(`Erro: ${e.message}`);
@@ -179,33 +195,35 @@ export default function EditarTurma() {
   return (
     <div style={{ padding: 20, maxWidth: 700, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ color: "#1a2a4f", margin: 0 }}>Editar Turma</h1>
+        {/* 👇 O TÍTULO MUDA BASEADO NA AÇÃO */}
+        <h1 style={{ color: "#1a2a4f", margin: 0 }}>{isNovaTurma ? "Criar Nova Turma" : "Editar Turma"}</h1>
         <button onClick={() => navigate(`/cursos/${cursoId}`)} style={{ padding: "8px 16px", background: "#6c757d", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>
           ← Voltar
         </button>
       </div>
 
-      <div style={{ background: "#e8f0ff", border: "1px solid #0070f3", borderRadius: 12, padding: 16, marginBottom: 20 }}>
-        <p style={{ margin: 0, color: "#1a2a4f", fontSize: 14 }}>
-          <strong>Alunos matriculados:</strong> {alunos.length} &nbsp;•&nbsp;
-          <strong>Capacidade:</strong> {form.vagasTotais} &nbsp;•&nbsp;
-          <strong style={{ color: (form.vagasTotais - alunos.length) > 0 ? "#28a745" : "#dc3545" }}>
-            {Math.max(0, form.vagasTotais - alunos.length)} vagas disponíveis
-          </strong>
-        </p>
-      </div>
+      {!isNovaTurma && (
+        <div style={{ background: "#e8f0ff", border: "1px solid #0070f3", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <p style={{ margin: 0, color: "#1a2a4f", fontSize: 14 }}>
+            <strong>Alunos matriculados:</strong> {alunos.length} &nbsp;•&nbsp;
+            <strong>Capacidade:</strong> {form.vagasTotais} &nbsp;•&nbsp;
+            <strong style={{ color: (form.vagasTotais - alunos.length) > 0 ? "#28a745" : "#dc3545" }}>
+              {Math.max(0, form.vagasTotais - alunos.length)} vagas disponíveis
+            </strong>
+          </p>
+        </div>
+      )}
 
       <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontWeight: 600, display: "block", marginBottom: 6 }}>Nome da turma *</label>
-          <input type="text" value={form.nome} onChange={e => handleChange("nome", e.target.value)} style={sInput} />
+          <input type="text" value={form.nome} onChange={e => handleChange("nome", e.target.value)} style={sInput} placeholder="Ex: Turma 01 - Manhã" />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <label style={{ fontWeight: 600, display: "block", marginBottom: 6 }}>Capacidade total (vagas) *</label>
-            <input type="number" min={alunos.length} value={form.vagasTotais} onChange={e => handleChange("vagasTotais", parseInt(e.target.value) || 0)} style={sInput} />
-            <p style={{ fontSize: 12, color: "#6b7a8f", margin: 0 }}>Mínimo: {alunos.length}</p>
+            <input type="number" min={0} value={form.vagasTotais} onChange={e => handleChange("vagasTotais", parseInt(e.target.value) || 0)} style={sInput} />
           </div>
           <div>
             <label style={{ fontWeight: 600, display: "block", marginBottom: 6 }}>Total de aulas</label>
@@ -288,14 +306,13 @@ export default function EditarTurma() {
           />
         </div>
 
-        {/* 🔥 PROFESSORES DA TURMA */}
+        {/* PROFESSORES DA TURMA */}
         <div style={{ marginTop: 20, marginBottom: 20, borderTop: "2px solid #e0e4e8", paddingTop: 20 }}>
           <label style={{ fontWeight: 700, display: "block", marginBottom: 6, fontSize: 15, color: "#1a2a4f" }}>
             👨‍🏫 Professores da turma
           </label>
           <p style={{ fontSize: 13, color: "#6b7a8f", margin: "0 0 12px" }}>
             Selecione os professores que assinarão os certificados desta turma.
-            Você pode marcar vários.
           </p>
 
           {professoresAtivos.length === 0 && (
@@ -352,21 +369,7 @@ export default function EditarTurma() {
               })}
             </div>
           )}
-
-          {professoresSelecionados.length > 0 && (
-            <p style={{ marginTop: 12, fontSize: 13, color: "#28a745", fontWeight: 600 }}>
-              ✓ {professoresSelecionados.length} professor(es) selecionado(s)
-            </p>
-          )}
         </div>
-
-        {Object.keys(camposExtras).length > 0 && (
-          <div style={{ background: "#fff8e1", border: "1px solid #ffc107", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "#856404" }}>
-              ℹ️ Esta turma tem {Object.keys(camposExtras).length} campo(s) extra(s) que serão preservados: {Object.keys(camposExtras).join(", ")}
-            </p>
-          </div>
-        )}
 
         <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <button
@@ -384,7 +387,8 @@ export default function EditarTurma() {
               fontWeight: 600,
             }}
           >
-            {salvando ? "Salvando..." : "💾 Salvar Alterações"}
+            {/* O BOTÃO MUDA BASEADO NA AÇÃO */}
+            {salvando ? "Salvando..." : isNovaTurma ? "💾 Criar Turma" : "💾 Salvar Alterações"}
           </button>
           <button
             onClick={() => navigate(`/cursos/${cursoId}`)}
