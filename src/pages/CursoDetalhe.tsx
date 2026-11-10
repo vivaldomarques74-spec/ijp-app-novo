@@ -102,6 +102,7 @@ export default function CursoDetalhe() {
 
   return (
     <div style={{ padding: 20 }}>
+      {/* CABEÇALHO DO CURSO */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         {editando ? (
           <div style={{ flex: 1, marginRight: 16 }}>
@@ -112,15 +113,7 @@ export default function CursoDetalhe() {
               type="text"
               value={nomeEdit}
               onChange={e => setNomeEdit(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                border: "2px solid #0070f3",
-                borderRadius: 8,
-                fontSize: 20,
-                fontWeight: 700,
-                color: "#1a2a4f",
-              }}
+              style={{ width: "100%", padding: 10, border: "2px solid #0070f3", borderRadius: 8, fontSize: 20, fontWeight: 700, color: "#1a2a4f" }}
               autoFocus
             />
             <label style={{ fontWeight: 600, display: "block", marginTop: 8, marginBottom: 4, fontSize: 13 }}>
@@ -129,13 +122,7 @@ export default function CursoDetalhe() {
             <textarea
               value={descricaoEdit}
               onChange={e => setDescricaoEdit(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 8,
-                border: "1px solid #ccc",
-                borderRadius: 8,
-                minHeight: 60,
-              }}
+              style={{ width: "100%", padding: 8, border: "1px solid #ccc", borderRadius: 8, minHeight: 60 }}
             />
           </div>
         ) : (
@@ -183,9 +170,20 @@ export default function CursoDetalhe() {
         </div>
       </div>
 
-      <h2 style={{ fontSize: 18, color: "#1a2a4f", marginBottom: 12 }}>
-        Turmas ({turmas.length})
-      </h2>
+      {/* 👇 AQUI ESTÁ A PARTE QUE FALTOU: TÍTULO + BOTÃO NOVA TURMA 👇 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, marginTop: 24 }}>
+        <h2 style={{ fontSize: 18, color: "#1a2a4f", margin: 0 }}>
+          Turmas ({turmas.length})
+        </h2>
+        
+        <button
+          onClick={() => navigate(`/cursos/${id}/turmas/nova`)}
+          style={{ padding: "8px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}
+        >
+          ➕ Nova Turma
+        </button>
+      </div>
+      {/* 👆 FIM DA PARTE DO BOTÃO 👆 */}
 
       {turmas.length === 0 && <p>Nenhuma turma cadastrada.</p>}
 
