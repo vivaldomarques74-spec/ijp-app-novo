@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, runTransaction, getCountFromServer } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
 import { db } from "../services/firebase";
 import { verificarCpfDuplicado } from "../services/validarCpf";
 
@@ -8,7 +8,7 @@ export default function AlunosCadastrar() {
   const navigate = useNavigate();
 
   const [dadosAluno, setDadosAluno] = useState({
-    nomeCompleto: "", cpf: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
+    nomeCompleto: "", cpf: "", cep: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
     responsavelNome: "", responsavelEmail: "", responsavelTelefone: "", responsavelCpf: "",
     status: "ativo", observacoes: "",
   });
@@ -20,6 +20,7 @@ export default function AlunosCadastrar() {
   const [turmaId, setTurmaId] = useState("");
   const [servicosSelecionados, setServicosSelecionados] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const [cpfStatus, setCpfStatus] = useState({ mensagem: "", existe: false, verificando: false });
   const cpfTimeoutRef = useRef<number | null>(null);
@@ -83,6 +84,39 @@ export default function AlunosCadastrar() {
     setDadosAluno((prev: any) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  // 👇 FUNÇÃO MÁGICA DO CEP
+  const buscarCep = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, "");
+    if (cepLimpo.length !== 8) return;
+
+    setBuscandoCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await response.json();
+      
+      if (!data.erro) {
+        setDadosAluno(prev => ({
+          ...prev,
+          endereco: `${data.logradouro || ""}, ${data.bairro || ""} - ${data.localidade || ""}/${data.uf || ""}`.trim()
+        }));
+      }
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error);
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
+  const handleCepChange = (e: any) => {
+    let valor = e.target.value.replace(/\D/g, "");
+    if (valor.length > 5) valor = valor.replace(/^(\d{5})(\d)/, "$1-$2");
+    setDadosAluno(prev => ({ ...prev, cep: valor }));
+    
+    if (valor.replace(/\D/g, "").length === 8) {
+      buscarCep(valor);
+    }
+  };
+
   const toggleServico = (id: string) => {
     setServicosSelecionados(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
@@ -94,10 +128,16 @@ export default function AlunosCadastrar() {
 
     setSalvando(true);
     try {
-      // GERA MATRÍCULA AUTOMÁTICA
-      const countSnap = await getCountFromServer(collection(db, "alunos"));
-      const proximoNumero = countSnap.data().count + 1;
-      const matriculaGerada = `IJP-${String(proximoNumero).padStart(5, "0")}`;
+      const countSnap = await getDocs(collection(db, "alunos"));
+      let maiorNumero = 0;
+      countSnap.docs.forEach(doc => {
+        const mat = doc.data().matricula;
+        if (mat && typeof mat === 'string' && mat.includes("IJP-")) {
+          const num = parseInt(mat.replace("IJP-", ""), 10);
+          if (!isNaN(num) && num > maiorNumero) maiorNumero = num;
+        }
+      });
+      const matriculaGerada = `IJP-${String(maiorNumero + 1).padStart(5, "0")}`;
 
       const novoAluno = {
         ...dadosAluno,
@@ -111,7 +151,6 @@ export default function AlunosCadastrar() {
 
       if (cursoId && turmaId) {
         const turmaRef = doc(db, "cursos", cursoId, "turmas", turmaId);
-        
         await runTransaction(db, async (transaction) => {
           const turmaSnap = await transaction.get(turmaRef);
           if (!turmaSnap.exists()) throw new Error("Turma não encontrada");
@@ -119,18 +158,13 @@ export default function AlunosCadastrar() {
           const alunosAtuais = turmaData.alunos || [];
           const capacidadeTotal = turmaData.vagasTotais || turmaData.totalVagas || turmaData.vagas || turmaData.capacidade || 0;
           const vagas = Math.max(0, capacidadeTotal - alunosAtuais.length);
-          
           if (vagas <= 0) throw new Error("Turma sem vagas disponíveis");
-          
           transaction.update(turmaRef, { alunos: arrayUnion(alunoRef.id), vagasTotais: capacidadeTotal });
         });
-
-        await updateDoc(doc(db, "alunos", alunoRef.id), {
-          cursos: [{ cursoId, turmaId, data: new Date() }]
-        });
+        await updateDoc(doc(db, "alunos", alunoRef.id), { cursos: [{ cursoId, turmaId, data: new Date() }] });
       }
 
-      alert(`Aluno cadastrado com sucesso! Matrícula: ${matriculaGerada}`);
+      alert(`Aluno cadastrado! Matrícula: ${matriculaGerada}`);
       navigate("/alunos");
     } catch (e: any) {
       alert(`Erro: ${e.message}`);
@@ -150,7 +184,22 @@ export default function AlunosCadastrar() {
           <input placeholder="Nome completo" value={dadosAluno.nomeCompleto} onChange={handleChange} name="nomeCompleto" style={inputStyle} />
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
           {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
-          <input placeholder="Endereço" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+
+          {/* 👇 CAMPO DE CEP NOVO */}
+          <div style={{ position: "relative" }}>
+            <input 
+              placeholder="CEP (Ex: 40000-000)" 
+              value={dadosAluno.cep} 
+              onChange={handleCepChange} 
+              name="cep" 
+              maxLength={9}
+              style={inputStyle} 
+            />
+            {buscandoCep && <span style={{ position: "absolute", right: 10, top: 10, fontSize: 12, color: "#0070f3" }}>Buscando...</span>}
+          </div>
+          
+          <input placeholder="Endereço (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+          
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
           <input type="date" value={dadosAluno.nascimento} onChange={handleChange} name="nascimento" style={inputStyle} />

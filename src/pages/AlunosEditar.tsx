@@ -9,7 +9,7 @@ export default function AlunosEditar() {
   const navigate = useNavigate();
 
   const [dadosAluno, setDadosAluno] = useState<any>({
-    nomeCompleto: "", cpf: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
+    nomeCompleto: "", cpf: "", cep: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
     responsavelNome: "", responsavelEmail: "", responsavelTelefone: "", responsavelCpf: "",
     status: "ativo", observacoes: "", cursos: [],
     servicosAtivos: [] as any[],
@@ -24,6 +24,7 @@ export default function AlunosEditar() {
   const [novoServicoId, setNovoServicoId] = useState("");
   const [novaSenhaId, setNovaSenhaId] = useState("");
   const [processando, setProcessando] = useState(false);
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const [cursosAtivos, setCursosAtivos] = useState<any[]>([]);
   const [cursosConcluidos, setCursosConcluidos] = useState<any[]>([]);
@@ -40,7 +41,7 @@ export default function AlunosEditar() {
     if (alunoSnap.exists()) {
       const data = alunoSnap.data();
       setDadosAluno({
-        nomeCompleto: data.nomeCompleto || "", cpf: data.cpf || "", endereco: data.endereco || "",
+        nomeCompleto: data.nomeCompleto || "", cpf: data.cpf || "", cep: data.cep || "", endereco: data.endereco || "",
         email: data.email || "", telefone: data.telefone || "", nascimento: data.nascimento || "", menor: data.menor || false,
         responsavelNome: data.responsavelNome || "", responsavelEmail: data.responsavelEmail || "",
         responsavelTelefone: data.responsavelTelefone || "", responsavelCpf: data.responsavelCpf || "",
@@ -115,7 +116,6 @@ export default function AlunosEditar() {
     setCursosConcluidos(concluidos);
   }
 
-  // 👇 AQUI ESTÁ A CORREÇÃO: Adicionando as tags de (Encerrada) e (Vagas)
   useEffect(() => {
     if (!novoCursoId) { setTurmas([]); setNovaTurmaId(""); return; }
     const carregarTurmas = async () => {
@@ -171,6 +171,44 @@ export default function AlunosEditar() {
     }, 500);
     return () => { if (cpfTimeoutRef.current) clearTimeout(cpfTimeoutRef.current); };
   }, [dadosAluno.cpf, id]);
+
+  const handleChange = (e: any) => {
+    const { name, value, type, checked } = e.target;
+    setDadosAluno((prev: any) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  // 👇 FUNÇÃO MÁGICA DO CEP
+  const buscarCep = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, "");
+    if (cepLimpo.length !== 8) return;
+
+    setBuscandoCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await response.json();
+      
+      if (!data.erro) {
+        setDadosAluno((prev: any) => ({
+          ...prev,
+          endereco: `${data.logradouro || ""}, ${data.bairro || ""} - ${data.localidade || ""}/${data.uf || ""}`.trim()
+        }));
+      }
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error);
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
+  const handleCepChange = (e: any) => {
+    let valor = e.target.value.replace(/\D/g, "");
+    if (valor.length > 5) valor = valor.replace(/^(\d{5})(\d)/, "$1-$2");
+    setDadosAluno((prev: any) => ({ ...prev, cep: valor }));
+    
+    if (valor.replace(/\D/g, "").length === 8) {
+      buscarCep(valor);
+    }
+  };
 
   const adicionarCurso = async () => {
     if (!novoCursoId || !novaTurmaId) return alert("Selecione curso e turma");
@@ -258,15 +296,10 @@ export default function AlunosEditar() {
     } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setProcessando(false); }
   };
 
-  const handleChange = (e: any) => {
-    const { name, value, type, checked } = e.target;
-    setDadosAluno((prev: any) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
-  };
-
   const salvar = async () => {
     if (cpfStatus.existe) return alert("CPF já cadastrado. Não é possível salvar.");
     await updateDoc(doc(db, "alunos", id!), {
-      nomeCompleto: dadosAluno.nomeCompleto, cpf: dadosAluno.cpf, endereco: dadosAluno.endereco, email: dadosAluno.email,
+      nomeCompleto: dadosAluno.nomeCompleto, cpf: dadosAluno.cpf, cep: dadosAluno.cep, endereco: dadosAluno.endereco, email: dadosAluno.email,
       telefone: dadosAluno.telefone, nascimento: dadosAluno.nascimento, menor: dadosAluno.menor,
       responsavelNome: dadosAluno.responsavelNome, responsavelEmail: dadosAluno.responsavelEmail,
       responsavelTelefone: dadosAluno.responsavelTelefone, responsavelCpf: dadosAluno.responsavelCpf,
@@ -289,7 +322,22 @@ export default function AlunosEditar() {
           <input placeholder="Nome" value={dadosAluno.nomeCompleto} onChange={handleChange} name="nomeCompleto" style={inputStyle} />
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
           {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
-          <input placeholder="Endereço" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+          
+          {/* 👇 CAMPO DE CEP NOVO */}
+          <div style={{ position: "relative" }}>
+            <input 
+              placeholder="CEP (Ex: 40000-000)" 
+              value={dadosAluno.cep || ""} 
+              onChange={handleCepChange} 
+              name="cep" 
+              maxLength={9}
+              style={inputStyle} 
+            />
+            {buscandoCep && <span style={{ position: "absolute", right: 10, top: 8, fontSize: 12, color: "#0070f3" }}>Buscando...</span>}
+          </div>
+          
+          <input placeholder="Endereço (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+          
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
           <input type="date" value={dadosAluno.nascimento} onChange={handleChange} name="nascimento" style={inputStyle} />
@@ -345,7 +393,6 @@ export default function AlunosEditar() {
             {cursos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
           
-          {/* 👇 CORREÇÃO AQUI: Agora mostra Encerrada e Vagas */}
           <select value={novaTurmaId} onChange={e => setNovaTurmaId(e.target.value)} disabled={!novoCursoId} style={inputStyle}>
             <option value="">Turma</option>
             {turmas.map(t => (
