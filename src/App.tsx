@@ -51,6 +51,7 @@ import HomeApp from "./pages/HomeApp";
 import AreaPublica from "./pages/AreaPublica";
 import MuralAvisos from "./pages/MuralAvisos";
 import AdminComunicados from "./pages/AdminComunicados";
+import AdminMateriais from "./pages/AdminMateriais"; // 👈 NOVO IMPORT
 
 export default function App() {
   const isApp = Capacitor.isNativePlatform();
@@ -122,6 +123,7 @@ export default function App() {
         <Route path="/atestados" element={<Atestados />} />
         <Route path="/admin/migrar-prontuarios" element={<AdminMigrarProntuarios />} />
         <Route path="/admin/comunicados" element={<AdminComunicados />} />
+        <Route path="/admin/materiais" element={<AdminMateriais />} /> {/* 👈 NOVA ROTA */}
         <Route path="/migracao-psicologia" element={<MigracaoPsicologia />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/relatorio-alunos" element={<RelatorioAlunosTurma />} />

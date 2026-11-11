@@ -29,12 +29,10 @@ export default function AdminMateriais() {
     }
     setEnviando(true);
     try {
-      // 1. Faz o upload do arquivo para o Firebase Storage
       const storageRef = ref(storage, `materiais/${form.cursoId}_${form.turmaId}/${Date.now()}_${arquivo.name}`);
       await uploadBytes(storageRef, arquivo);
       const url = await getDownloadURL(storageRef);
 
-      // 2. Salva os dados no Firestore
       await addDoc(collection(db, "materiais"), {
         titulo: form.titulo,
         cursoId: form.cursoId,
@@ -59,9 +57,8 @@ export default function AdminMateriais() {
 
   return (
     <div style={{ padding: 20, maxWidth: 800, margin: "0 auto" }}>
-      <h2>Enviar Materiais e Apostilas</h2>
-      
-      <div style={{ background: "#fff", padding: 20, borderRadius: 12 }}>
+      <h2>📚 Enviar Materiais e Apostilas</h2>
+      <div style={{ background: "#fff", padding: 20, borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <label>Título do Material:</label>
         <input type="text" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} style={sInput} placeholder="Ex: Apostila de Libras - Aula 1" />
 

@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { doc, getDoc, updateDoc, collection, getDocs, arrayUnion, runTransaction, addDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, arrayUnion, runTransaction, addDoc, query, where } from "firebase/firestore";
 import { db } from "../services/firebase";
-import { verificarCpfDuplicado } from "../services/validarCpf";
+import { verificarCpfDuplicado } from "../services/validarCpf"; // 👈 Importação restaurada
 
 export default function AlunosEditar() {
   const { id } = useParams<{ id: string }>();
@@ -12,8 +12,9 @@ export default function AlunosEditar() {
     nomeCompleto: "", cpf: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
     responsavelNome: "", responsavelEmail: "", responsavelTelefone: "", responsavelCpf: "",
     status: "ativo", observacoes: "", cursos: [],
-    servicosAtivos: [] as { tipoId: string; modalidade: string; senhaId?: string; senhaNumero?: string; prioridade?: boolean }[],
+    servicosAtivos: [] as any[],
   });
+  
   const [cursos, setCursos] = useState<any[]>([]);
   const [turmas, setTurmas] = useState<any[]>([]);
   const [tiposAtendimento, setTiposAtendimento] = useState<any[]>([]);
@@ -24,6 +25,10 @@ export default function AlunosEditar() {
   const [novaSenhaId, setNovaSenhaId] = useState("");
   const [processando, setProcessando] = useState(false);
 
+  const [cursosAtivos, setCursosAtivos] = useState<any[]>([]);
+  const [cursosConcluidos, setCursosConcluidos] = useState<any[]>([]);
+
+  // 👇 ESTADOS DO CPF RESTAURADOS
   const [cpfStatus, setCpfStatus] = useState({ mensagem: "", existe: false, verificando: false });
   const cpfTimeoutRef = useRef<number | null>(null);
 
@@ -45,11 +50,51 @@ export default function AlunosEditar() {
         cursos: data.cursos || [],
         servicosAtivos: data.servicosAtivos || [],
       });
+      await carregarHistoricoEAtivos(data.cursos || []);
     }
+    
     const cursosSnap = await getDocs(collection(db, "cursos"));
     setCursos(cursosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    
     const tiposSnap = await getDocs(collection(db, "tiposAtendimento"));
     setTiposAtendimento(tiposSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }
+
+  async function carregarHistoricoEAtivos(cursosDoAluno: any[]) {
+    const ativos: any[] = [];
+    const concluidos: any[] = [];
+
+    for (const item of cursosDoAluno) {
+      const cursoSnap = await getDoc(doc(db, "cursos", item.cursoId));
+      const turmaSnap = await getDoc(doc(db, "cursos", item.cursoId, "turmas", item.turmaId));
+      
+      if (cursoSnap.exists() && turmaSnap.exists()) {
+        const cursoNome = cursoSnap.data().nome;
+        const turmaData = turmaSnap.data();
+        const totalAulas = turmaData.totalAulas || 0;
+        const statusTurma = turmaData.status || "ativa";
+
+        let presencas = 0;
+        if (totalAulas > 0) {
+          const presSnap = await getDocs(query(
+            collection(db, "presencas"),
+            where("alunoId", "==", id),
+            where("cursoId", "==", item.cursoId),
+            where("turmaId", "==", item.turmaId),
+            where("presente", "==", true)
+          ));
+          presencas = presSnap.size;
+        }
+        const frequencia = totalAulas > 0 ? Math.round((presencas / totalAulas) * 100) : 0;
+
+        const info = { cursoId: item.cursoId, cursoNome, turmaId: item.turmaId, turmaNome: turmaData.nome, frequencia, totalAulas, presencas, status: statusTurma };
+
+        if (statusTurma === "encerrada") concluidos.push(info);
+        else ativos.push(info);
+      }
+    }
+    setCursosAtivos(ativos);
+    setCursosConcluidos(concluidos);
   }
 
   useEffect(() => {
@@ -61,11 +106,7 @@ export default function AlunosEditar() {
         const alunosBruto = data.alunos || [];
         const alunosUnicos = Array.from(new Set(alunosBruto));
         const capacidade = data.vagasTotais || data.totalVagas || data.vagas || data.capacidade || 0;
-        return {
-          id: d.id,
-          ...data,
-          vagasDisponiveis: Math.max(0, capacidade - alunosUnicos.length),
-        };
+        return { id: d.id, ...data, vagasDisponiveis: Math.max(0, capacidade - alunosUnicos.length) };
       }));
     };
     carregarTurmas();
@@ -81,6 +122,7 @@ export default function AlunosEditar() {
     carregarSenhas();
   }, [novoServicoId]);
 
+  // 👇 LÓGICA DE VERIFICAÇÃO DE CPF RESTAURADA
   useEffect(() => {
     const cpf = dadosAluno.cpf.replace(/\D/g, "");
     if (cpf.length !== 11) {
@@ -107,7 +149,6 @@ export default function AlunosEditar() {
     };
   }, [dadosAluno.cpf, id]);
 
-  // ============ ADICIONAR CURSO ============
   const adicionarCurso = async () => {
     if (!novoCursoId || !novaTurmaId) return alert("Selecione curso e turma");
     const jaVinculado = dadosAluno.cursos.some((c: any) => c.cursoId === novoCursoId && c.turmaId === novaTurmaId);
@@ -123,10 +164,7 @@ export default function AlunosEditar() {
         const capacidadeTotal = turmaData.vagasTotais || turmaData.totalVagas || turmaData.vagas || turmaData.capacidade || 0;
         const vagas = Math.max(0, capacidadeTotal - alunosAtuais.length);
         if (vagas <= 0) throw new Error("Sem vagas");
-        transaction.update(turmaRef, {
-          alunos: arrayUnion(id),
-          vagasTotais: capacidadeTotal,
-        });
+        transaction.update(turmaRef, { alunos: arrayUnion(id), vagasTotais: capacidadeTotal });
       });
       const novosCursos = [...dadosAluno.cursos, { cursoId: novoCursoId, turmaId: novaTurmaId, data: new Date() }];
       await updateDoc(doc(db, "alunos", id!), { cursos: novosCursos });
@@ -134,12 +172,12 @@ export default function AlunosEditar() {
       alert("Curso adicionado com sucesso!");
       setNovoCursoId("");
       setNovaTurmaId("");
+      carregarHistoricoEAtivos(novosCursos);
     } catch (error: any) {
       alert(error.message);
     }
   };
 
-  // ============ ADICIONAR SERVIÇO (primeira vez) ============
   const adicionarServico = async () => {
     if (!novoServicoId) return alert("Selecione um serviço");
     const jaVinculado = dadosAluno.servicosAtivos.some((s: any) => s.tipoId === novoServicoId);
@@ -159,23 +197,9 @@ export default function AlunosEditar() {
         novoServico.senhaId = novaSenhaId;
         novoServico.senhaNumero = senhaData.numero;
         novoServico.prioridade = senhaData.tipo === "prioridade";
-        await addDoc(collection(db, "filaEspera"), {
-          alunoId: id,
-          tipoId: novoServicoId,
-          dataSolicitacao: new Date(),
-          status: "aguardando",
-          modalidade: "presencial",
-          senhaNumero: senhaData.numero,
-          prioridade: senhaData.tipo === "prioridade",
-        });
+        await addDoc(collection(db, "filaEspera"), { alunoId: id, tipoId: novoServicoId, dataSolicitacao: new Date(), status: "aguardando", modalidade: "presencial", senhaNumero: senhaData.numero, prioridade: senhaData.tipo === "prioridade" });
       } else {
-        await addDoc(collection(db, "filaEspera"), {
-          alunoId: id,
-          tipoId: novoServicoId,
-          dataSolicitacao: new Date(),
-          status: "aguardando",
-          modalidade: "presencial",
-        });
+        await addDoc(collection(db, "filaEspera"), { alunoId: id, tipoId: novoServicoId, dataSolicitacao: new Date(), status: "aguardando", modalidade: "presencial" });
       }
       const novosServicos = [...dadosAluno.servicosAtivos, novoServico];
       await updateDoc(doc(db, "alunos", id!), { servicosAtivos: novosServicos });
@@ -191,65 +215,32 @@ export default function AlunosEditar() {
     }
   };
 
-  // ============ 🔥 NOVO: REMOVER SERVIÇO (tira do servicoAtivos E da fila) ============
   const removerServico = async (tipoId: string) => {
-    if (!window.confirm("Remover este serviço? O aluno sairá da fila e do cadastro de serviço.")) return;
+    if (!window.confirm("Remover este serviço?")) return;
     setProcessando(true);
     try {
-      // Remove do array servicosAtivos
       const novosServicos = dadosAluno.servicosAtivos.filter((s: any) => s.tipoId !== tipoId);
       await updateDoc(doc(db, "alunos", id!), { servicosAtivos: novosServicos });
-
-      // Remove da fila de espera (se estiver lá aguardando)
       const filaSnap = await getDocs(collection(db, "filaEspera"));
       for (const f of filaSnap.docs) {
         const fd = f.data();
-        if (fd.alunoId === id && fd.tipoId === tipoId && (fd.status === "aguardando" || fd.status === "vinculado")) {
-          await updateDoc(f.ref, { status: "cancelado" });
-        }
+        if (fd.alunoId === id && fd.tipoId === tipoId && (fd.status === "aguardando" || fd.status === "vinculado")) await updateDoc(f.ref, { status: "cancelado" });
       }
-
       setDadosAluno({ ...dadosAluno, servicosAtivos: novosServicos });
       alert("Serviço removido!");
-    } catch (e: any) {
-      alert(`Erro: ${e.message}`);
-    } finally {
-      setProcessando(false);
-    }
+    } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setProcessando(false); }
   };
 
-  // ============ 🔥 NOVO: REENVIAR PARA FILA ============
   const reenviarParaFila = async (tipoId: string) => {
     if (!window.confirm("Reenviar este aluno para a fila de espera?")) return;
     setProcessando(true);
     try {
-      // 1. Verifica se já está na fila
       const filaSnap = await getDocs(collection(db, "filaEspera"));
-      const jaNaFila = filaSnap.docs.some(f => {
-        const fd = f.data();
-        return fd.alunoId === id && fd.tipoId === tipoId && (fd.status === "aguardando" || fd.status === "vinculado");
-      });
-      if (jaNaFila) {
-        alert("Este aluno já está na fila deste serviço!");
-        setProcessando(false);
-        return;
-      }
-
-      // 2. Adiciona nova entrada na fila
-      await addDoc(collection(db, "filaEspera"), {
-        alunoId: id,
-        tipoId,
-        dataSolicitacao: new Date(),
-        status: "aguardando",
-        modalidade: "presencial",
-      });
-
+      const jaNaFila = filaSnap.docs.some(f => { const fd = f.data(); return fd.alunoId === id && fd.tipoId === tipoId && (fd.status === "aguardando" || fd.status === "vinculado"); });
+      if (jaNaFila) { alert("Este aluno já está na fila deste serviço!"); setProcessando(false); return; }
+      await addDoc(collection(db, "filaEspera"), { alunoId: id, tipoId, dataSolicitacao: new Date(), status: "aguardando", modalidade: "presencial" });
       alert("Aluno reenviado para a fila!");
-    } catch (e: any) {
-      alert(`Erro: ${e.message}`);
-    } finally {
-      setProcessando(false);
-    }
+    } catch (e: any) { alert(`Erro: ${e.message}`); } finally { setProcessando(false); }
   };
 
   const handleChange = (e: any) => {
@@ -258,70 +249,45 @@ export default function AlunosEditar() {
   };
 
   const salvar = async () => {
-    if (cpfStatus.existe) {
-      alert("CPF já cadastrado. Não é possível salvar.");
-      return;
-    }
+    if (cpfStatus.existe) return alert("CPF já cadastrado. Não é possível salvar.");
     await updateDoc(doc(db, "alunos", id!), {
-      nomeCompleto: dadosAluno.nomeCompleto,
-      cpf: dadosAluno.cpf,
-      endereco: dadosAluno.endereco,
-      email: dadosAluno.email,
-      telefone: dadosAluno.telefone,
-      nascimento: dadosAluno.nascimento,
-      menor: dadosAluno.menor,
-      responsavelNome: dadosAluno.responsavelNome,
-      responsavelEmail: dadosAluno.responsavelEmail,
-      responsavelTelefone: dadosAluno.responsavelTelefone,
-      responsavelCpf: dadosAluno.responsavelCpf,
-      status: dadosAluno.status,
-      observacoes: dadosAluno.observacoes,
+      nomeCompleto: dadosAluno.nomeCompleto, cpf: dadosAluno.cpf, endereco: dadosAluno.endereco, email: dadosAluno.email,
+      telefone: dadosAluno.telefone, nascimento: dadosAluno.nascimento, menor: dadosAluno.menor,
+      responsavelNome: dadosAluno.responsavelNome, responsavelEmail: dadosAluno.responsavelEmail,
+      responsavelTelefone: dadosAluno.responsavelTelefone, responsavelCpf: dadosAluno.responsavelCpf,
+      status: dadosAluno.status, observacoes: dadosAluno.observacoes,
     });
     alert("Dados atualizados");
     navigate("/alunos");
   };
 
-  const getCursoNome = (cursoId: string) => {
-    const curso = cursos.find(c => c.id === cursoId);
-    return curso?.nome || "Curso não encontrado";
-  };
-
-  const getServicoNome = (tipoId: string) => {
-    const servico = tiposAtendimento.find(t => t.id === tipoId);
-    return servico?.nome || "Serviço não encontrado";
-  };
-
+  const getServicoNome = (tipoId: string) => tiposAtendimento.find(t => t.id === tipoId)?.nome || "Serviço não encontrado";
   const inputStyle = { width: "100%", padding: 8, border: "1px solid #ccc", borderRadius: 8, marginBottom: 8 };
-  const buttonStyle = (type: "primary" | "secondary") => ({
-    padding: "8px 16px",
-    border: "none",
-    borderRadius: 8,
-    background: type === "primary" ? "#0070f3" : "#28a745",
-    color: "#fff",
-    cursor: "pointer",
-    marginTop: 8,
-  });
+  const buttonStyle = (type: "primary" | "secondary") => ({ padding: "8px 16px", border: "none", borderRadius: 8, background: type === "primary" ? "#0070f3" : "#28a745", color: "#fff", cursor: "pointer", marginTop: 8 });
 
   return (
-    <div style={{ maxWidth: 700, margin: "0 auto" }}>
+    <div style={{ maxWidth: 900, margin: "0 auto" }}>
       <h2 style={{ fontSize: 20, color: "#1a2a4f" }}>Editar Aluno</h2>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      
+      <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24 }}>
+         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <input placeholder="Nome" value={dadosAluno.nomeCompleto} onChange={handleChange} name="nomeCompleto" style={inputStyle} />
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
+          
+          {/* 👇 MENSAGEM DE VERIFICAÇÃO DE CPF RESTAURADA */}
           {cpfStatus.mensagem && (
             <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>
               {cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}
             </div>
           )}
+
           <input placeholder="Endereço" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
           <input type="date" value={dadosAluno.nascimento} onChange={handleChange} name="nascimento" style={inputStyle} />
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
-          <input type="checkbox" checked={dadosAluno.menor} onChange={handleChange} name="menor" />
-          Menor de idade
+          <input type="checkbox" checked={dadosAluno.menor} onChange={handleChange} name="menor" /> Menor de idade
         </label>
         {dadosAluno.menor && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
@@ -331,18 +297,41 @@ export default function AlunosEditar() {
             <input placeholder="Email resp." value={dadosAluno.responsavelEmail} onChange={handleChange} name="responsavelEmail" style={inputStyle} />
           </div>
         )}
-        <select value={dadosAluno.status} onChange={handleChange} name="status" style={inputStyle}>
-          <option value="ativo">Ativo</option>
-          <option value="inativo">Inativo</option>
-        </select>
+        <select value={dadosAluno.status} onChange={handleChange} name="status" style={inputStyle}><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
         <textarea placeholder="Observações" value={dadosAluno.observacoes} onChange={handleChange} name="observacoes" style={{ ...inputStyle, minHeight: 60 }} />
-        <button onClick={salvar} disabled={cpfStatus.existe} style={buttonStyle("primary")}>
-          Salvar Alterações
-        </button>
+        
+        {/* 👇 BOTÃO SALVAR COM VALIDAÇÃO DE CPF RESTAURADA */}
+        <button onClick={salvar} disabled={cpfStatus.existe} style={buttonStyle("primary")}>Salvar Alterações</button>
       </div>
 
-      <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* CURSO */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <h3 style={{ fontSize: 16, margin: "0 0 12px", color: "#28a745" }}>📚 Cursos e Turmas Ativas</h3>
+          {cursosAtivos.length === 0 && <p style={{ fontSize: 13, color: "#6b7a8f" }}>Nenhum curso ativo no momento.</p>}
+          {cursosAtivos.map(c => (
+            <div key={`${c.cursoId}_${c.turmaId}`} style={{ background: "#f8f9fa", padding: 12, borderRadius: 8, marginBottom: 8, borderLeft: "4px solid #28a745" }}>
+              <strong style={{ display: "block", color: "#1a2a4f" }}>{c.cursoNome}</strong>
+              <span style={{ fontSize: 12, color: "#6b7a8f" }}>Turma: {c.turmaNome}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <h3 style={{ fontSize: 16, margin: "0 0 12px", color: "#0070f3" }}>🎓 Histórico de Cursos</h3>
+          {cursosConcluidos.length === 0 && <p style={{ fontSize: 13, color: "#6b7a8f" }}>Nenhum curso concluído ainda.</p>}
+          {cursosConcluidos.map(c => (
+            <div key={`${c.cursoId}_${c.turmaId}`} style={{ background: "#f8f9fa", padding: 12, borderRadius: 8, marginBottom: 8, borderLeft: "4px solid #0070f3" }}>
+              <strong style={{ display: "block", color: "#1a2a4f" }}>{c.cursoNome}</strong>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7a8f", marginTop: 4 }}>
+                <span>Turma: {c.turmaNome}</span>
+                <span style={{ fontWeight: 600, color: c.frequencia >= 70 ? "#28a745" : "#dc3545" }}>{c.frequencia}% Freq. ({c.presencas}/{c.totalAulas})</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <h3 style={{ fontSize: 16, margin: "0 0 12px" }}>Adicionar Curso</h3>
           <select value={novoCursoId} onChange={e => setNovoCursoId(e.target.value)} style={inputStyle}>
@@ -351,26 +340,16 @@ export default function AlunosEditar() {
           </select>
           <select value={novaTurmaId} onChange={e => setNovaTurmaId(e.target.value)} disabled={!novoCursoId} style={inputStyle}>
             <option value="">Turma</option>
-            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome} (vagas: {t.vagasDisponiveis})</option>)}
+            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
           </select>
-          <button onClick={adicionarCurso} style={buttonStyle("secondary")}>Adicionar Curso</button>
-          <div style={{ marginTop: 8, fontSize: 13, color: "#6b7a8f" }}>
-            {dadosAluno.cursos.map((c: any) => (
-              <div key={c.cursoId}>• {getCursoNome(c.cursoId)}</div>
-            ))}
-          </div>
+          <button onClick={adicionarCurso} style={buttonStyle("secondary")}>Matricular em Curso</button>
         </div>
 
-        {/* SERVIÇO */}
         <div style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <h3 style={{ fontSize: 16, margin: "0 0 12px" }}>Serviços de Saúde</h3>
-
-          {/* Adicionar novo serviço */}
           <select value={novoServicoId} onChange={e => setNovoServicoId(e.target.value)} style={inputStyle}>
             <option value="">Adicionar serviço...</option>
-            {tiposAtendimento
-              .filter(t => !dadosAluno.servicosAtivos.some((s: any) => s.tipoId === t.id))
-              .map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            {tiposAtendimento.filter(t => !dadosAluno.servicosAtivos.some((s: any) => s.tipoId === t.id)).map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
           </select>
           {senhasDisponiveis[novoServicoId] && (
             <select value={novaSenhaId} onChange={e => setNovaSenhaId(e.target.value)} style={inputStyle}>
@@ -378,67 +357,15 @@ export default function AlunosEditar() {
               {senhasDisponiveis[novoServicoId].map(s => <option key={s.id} value={s.id}>{s.numero} - {s.tipo}</option>)}
             </select>
           )}
-          {novoServicoId && (
-            <button onClick={adicionarServico} disabled={processando} style={buttonStyle("secondary")}>
-              {processando ? "Processando..." : "Adicionar Serviço"}
-            </button>
-          )}
+          {novoServicoId && <button onClick={adicionarServico} disabled={processando} style={buttonStyle("secondary")}>Adicionar Serviço</button>}
 
-          {/* Lista de serviços ativos com botões */}
           <div style={{ marginTop: 16 }}>
-            <p style={{ fontSize: 13, color: "#6b7a8f", margin: "0 0 8px", fontWeight: 600 }}>
-              Serviços ativos:
-            </p>
-            {dadosAluno.servicosAtivos.length === 0 && (
-              <p style={{ fontSize: 13, color: "#6b7a8f" }}>Nenhum serviço ativo.</p>
-            )}
+            <p style={{ fontSize: 13, color: "#6b7a8f", margin: "0 0 8px", fontWeight: 600 }}>Serviços ativos:</p>
             {dadosAluno.servicosAtivos.map((s: any) => (
-              <div
-                key={s.tipoId}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "8px 10px",
-                  background: "#f8f9fa",
-                  borderRadius: 6,
-                  marginBottom: 6,
-                  gap: 8,
-                }}
-              >
+              <div key={s.tipoId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#f8f9fa", borderRadius: 6, marginBottom: 6, gap: 8 }}>
                 <span style={{ fontSize: 13, flex: 1 }}>• {getServicoNome(s.tipoId)}</span>
-                <button
-                  onClick={() => reenviarParaFila(s.tipoId)}
-                  disabled={processando}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 11,
-                    background: "#17a2b8",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                  }}
-                  title="Reenviar para a fila de espera"
-                >
-                  🔄 Reenviar para fila
-                </button>
-                <button
-                  onClick={() => removerServico(s.tipoId)}
-                  disabled={processando}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 11,
-                    background: "#dc3545",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                  }}
-                  title="Remover este serviço"
-                >
-                  ❌ Remover
-                </button>
+                <button onClick={() => reenviarParaFila(s.tipoId)} style={{ padding: "4px 8px", fontSize: 11, background: "#17a2b8", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>🔄 Fila</button>
+                <button onClick={() => removerServico(s.tipoId)} style={{ padding: "4px 8px", fontSize: 11, background: "#dc3545", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>❌</button>
               </div>
             ))}
           </div>

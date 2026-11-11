@@ -28,7 +28,8 @@ export default function Layout() {
     { path: "/saude", label: "Saúde", icon: "🏥" },
     { path: "/atestados", label: "Atestados", icon: "📄" },
     { path: "/certificados", label: "Certificados", icon: "📜" },
-    { path: "/admin/comunicados", label: "Comunicação", icon: "📢" }, // 👈 NOVO ITEM AQUI
+    { path: "/admin/comunicados", label: "Comunicação", icon: "📢" },
+    { path: "/admin/materiais", label: "Materiais", icon: "📂" }, // 👈 NOVO ITEM
     { path: "/pre-inscricoes", label: "Pré-inscrições", icon: "📝" },
     { path: "/matriculas-turma", label: "Matrículas", icon: "📋" },
   ];
@@ -82,59 +83,22 @@ export default function Layout() {
           ))}
         </nav>
         <div style={{ padding: "16px 20px", borderTop: "1px solid #e0e4e8", fontSize: 13, color: "#6b7a8f" }}>
-          <Link
-            to="/notificacoes"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              textDecoration: "none",
-              color: "#4a5a6f",
-            }}
-          >
+          <Link to="/notificacoes" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "#4a5a6f" }}>
             🔔 Notificações
             {notificacoesNaoLidas > 0 && (
-              <span
-                style={{
-                  background: "#dc3545",
-                  color: "#fff",
-                  borderRadius: "50%",
-                  padding: "2px 8px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  marginLeft: "auto",
-                }}
-              >
+              <span style={{ background: "#dc3545", color: "#fff", borderRadius: "50%", padding: "2px 8px", fontSize: 11, fontWeight: 600, marginLeft: "auto" }}>
                 {notificacoesNaoLidas}
               </span>
             )}
           </Link>
-          <Link
-            to="/acesso-profissional"
-            style={{
-              display: "block",
-              marginTop: 8,
-              textDecoration: "none",
-              color: "#0070f3",
-              fontSize: 13,
-            }}
-          >
+          <Link to="/acesso-profissional" style={{ display: "block", marginTop: 8, textDecoration: "none", color: "#0070f3", fontSize: 13 }}>
             👤 Área do Profissional
           </Link>
         </div>
       </aside>
 
       <main style={{ marginLeft: 240, flex: 1, padding: 24 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 24,
-            paddingBottom: 16,
-            borderBottom: "1px solid #e0e4e8",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid #e0e4e8" }}>
           <h1 style={{ fontSize: 22, fontWeight: 600, color: "#1a2a4f", margin: 0 }}>
             {menuItems.find((item) => item.path === location.pathname)?.label || "Dashboard"}
           </h1>
