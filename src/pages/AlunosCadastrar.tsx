@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, updateDoc, arrayUnion, runTransaction, getCountFromServer } from "firebase/firestore";
 import { db } from "../services/firebase";
 import { verificarCpfDuplicado } from "../services/validarCpf";
 
@@ -38,7 +38,22 @@ export default function AlunosCadastrar() {
     if (!cursoId) { setTurmas([]); setTurmaId(""); return; }
     const carregarTurmas = async () => {
       const snap = await getDocs(collection(db, "cursos", cursoId, "turmas"));
-      setTurmas(snap.docs.map(d => ({ id: d.id, nome: d.data().nome })));
+      setTurmas(snap.docs.map(d => {
+        const data = d.data();
+        const alunosBruto = data.alunos || [];
+        const alunosUnicos = Array.from(new Set(alunosBruto));
+        const capacidade = data.vagasTotais || data.totalVagas || data.vagas || data.capacidade || 0;
+        let dataFim = null;
+        if (data.dataFim) {
+          dataFim = data.dataFim.toDate ? data.dataFim.toDate() : new Date(data.dataFim);
+        }
+        return { 
+          id: d.id, 
+          ...data, 
+          vagasDisponiveis: Math.max(0, capacidade - alunosUnicos.length),
+          encerrada: dataFim ? dataFim < new Date() : false
+        };
+      }));
     };
     carregarTurmas();
   }, [cursoId]);
@@ -79,17 +94,21 @@ export default function AlunosCadastrar() {
 
     setSalvando(true);
     try {
-      // 1. Salva o aluno
+      // GERA MATRÍCULA AUTOMÁTICA
+      const countSnap = await getCountFromServer(collection(db, "alunos"));
+      const proximoNumero = countSnap.data().count + 1;
+      const matriculaGerada = `IJP-${String(proximoNumero).padStart(5, "0")}`;
+
       const novoAluno = {
         ...dadosAluno,
-        cursos: [], // Começa vazio
+        matricula: matriculaGerada,
+        cursos: [],
         servicosAtivos: servicosSelecionados.map(s => ({ tipoId: s, modalidade: "presencial" })),
         createdAt: new Date(),
       };
 
       const alunoRef = await addDoc(collection(db, "alunos"), novoAluno);
 
-      // 2. Se selecionou curso e turma, vincula automaticamente
       if (cursoId && turmaId) {
         const turmaRef = doc(db, "cursos", cursoId, "turmas", turmaId);
         
@@ -103,20 +122,15 @@ export default function AlunosCadastrar() {
           
           if (vagas <= 0) throw new Error("Turma sem vagas disponíveis");
           
-          // Adiciona o aluno na turma
-          transaction.update(turmaRef, { 
-            alunos: arrayUnion(alunoRef.id), 
-            vagasTotais: capacidadeTotal 
-          });
+          transaction.update(turmaRef, { alunos: arrayUnion(alunoRef.id), vagasTotais: capacidadeTotal });
         });
 
-        // Atualiza o aluno com o curso
         await updateDoc(doc(db, "alunos", alunoRef.id), {
           cursos: [{ cursoId, turmaId, data: new Date() }]
         });
       }
 
-      alert("Aluno cadastrado com sucesso!");
+      alert(`Aluno cadastrado com sucesso! Matrícula: ${matriculaGerada}`);
       navigate("/alunos");
     } catch (e: any) {
       alert(`Erro: ${e.message}`);
@@ -135,13 +149,7 @@ export default function AlunosCadastrar() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <input placeholder="Nome completo" value={dadosAluno.nomeCompleto} onChange={handleChange} name="nomeCompleto" style={inputStyle} />
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
-          
-          {cpfStatus.mensagem && (
-            <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>
-              {cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}
-            </div>
-          )}
-
+          {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
           <input placeholder="Endereço" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
@@ -152,16 +160,13 @@ export default function AlunosCadastrar() {
         </label>
         {dadosAluno.menor && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <input placeholder="Nome do Responsável" value={dadosAluno.responsavelNome} onChange={handleChange} name="responsavelNome" style={inputStyle} />
-            <input placeholder="CPF do Responsável" value={dadosAluno.responsavelCpf} onChange={handleChange} name="responsavelCpf" style={inputStyle} />
-            <input placeholder="Telefone do Responsável" value={dadosAluno.responsavelTelefone} onChange={handleChange} name="responsavelTelefone" style={inputStyle} />
-            <input placeholder="Email do Responsável" value={dadosAluno.responsavelEmail} onChange={handleChange} name="responsavelEmail" style={inputStyle} />
+            <input placeholder="Responsável" value={dadosAluno.responsavelNome} onChange={handleChange} name="responsavelNome" style={inputStyle} />
+            <input placeholder="CPF resp." value={dadosAluno.responsavelCpf} onChange={handleChange} name="responsavelCpf" style={inputStyle} />
+            <input placeholder="Telefone resp." value={dadosAluno.responsavelTelefone} onChange={handleChange} name="responsavelTelefone" style={inputStyle} />
+            <input placeholder="Email resp." value={dadosAluno.responsavelEmail} onChange={handleChange} name="responsavelEmail" style={inputStyle} />
           </div>
         )}
-        <select value={dadosAluno.status} onChange={handleChange} name="status" style={inputStyle}>
-          <option value="ativo">Ativo</option>
-          <option value="inativo">Inativo</option>
-        </select>
+        <select value={dadosAluno.status} onChange={handleChange} name="status" style={inputStyle}><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
         <textarea placeholder="Observações" value={dadosAluno.observacoes} onChange={handleChange} name="observacoes" style={{ ...inputStyle, minHeight: 60 }} />
         <button onClick={salvar} disabled={salvando} style={{ padding: "12px 24px", background: salvando ? "#999" : "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: salvando ? "wait" : "pointer", fontWeight: 600 }}>
           {salvando ? "Salvando..." : "Salvar Aluno"}
@@ -177,7 +182,11 @@ export default function AlunosCadastrar() {
           </select>
           <select value={turmaId} onChange={e => setTurmaId(e.target.value)} disabled={!cursoId} style={inputStyle}>
             <option value="">Turma</option>
-            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            {turmas.map(t => (
+              <option key={t.id} value={t.id} disabled={t.vagasDisponiveis <= 0 || t.encerrada}>
+                {t.nome} {t.encerrada ? "(Encerrada)" : t.vagasDisponiveis <= 0 ? "(Sem Vagas)" : `(Vagas: ${t.vagasDisponiveis})`}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -185,8 +194,7 @@ export default function AlunosCadastrar() {
           <h3 style={{ fontSize: 16, margin: "0 0 12px" }}>Serviços de Saúde</h3>
           {tiposAtendimento.map(t => (
             <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <input type="checkbox" checked={servicosSelecionados.includes(t.id)} onChange={() => toggleServico(t.id)} />
-              {t.nome}
+              <input type="checkbox" checked={servicosSelecionados.includes(t.id)} onChange={() => toggleServico(t.id)} /> {t.nome}
             </label>
           ))}
         </div>

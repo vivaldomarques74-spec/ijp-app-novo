@@ -56,11 +56,9 @@ export default function AlunosEditar() {
     const tiposSnap = await getDocs(collection(db, "tiposAtendimento"));
     setTiposAtendimento(tiposSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     
-    // Chama a varredura de turmas
     await carregarHistoricoEAtivos();
   }
 
-  // 👇 LÓGICA CORRIGIDA E BLINDADA CONTRA ERROS DE NULL
   async function carregarHistoricoEAtivos() {
     if (!id) return;
     

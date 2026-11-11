@@ -493,6 +493,45 @@ export default function AdminUnificacao() {
     finally { setCarregando(false); }
   };
 
+  // 👇 NOVA FUNÇÃO: Corrigir apenas quem não tem matrícula
+  const handleCorrigirMatriculasFaltantes = async () => {
+    if (!confirm("Isso vai preencher a matrícula APENAS dos alunos que estão sem (não vai mexer em quem já tem). Continuar?")) return;
+    setCarregando(true); setLogs([]);
+    
+    try {
+      const snap = await getDocs(collection(db, "alunos"));
+      const alunos = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      
+      let maiorNumero = 0;
+      alunos.forEach(a => {
+        if (a.matricula && typeof a.matricula === 'string') {
+          const num = parseInt(a.matricula.replace(/\D/g, ""), 10);
+          if (!isNaN(num) && num > maiorNumero) maiorNumero = num;
+        }
+      });
+      
+      adicionarLog(`Maior matrícula atual: IJP-${String(maiorNumero).padStart(5, "0")}`);
+      adicionarLog(`---`);
+
+      let contador = maiorNumero + 1;
+      let corrigidos = 0;
+
+      for (const aluno of alunos) {
+        if (!aluno.matricula || aluno.matricula.trim() === "") {
+          const matriculaGerada = `IJP-${String(contador).padStart(5, "0")}`;
+          await updateDoc(doc(db, "alunos", aluno.id), { matricula: matriculaGerada });
+          adicionarLog(`✅ ${aluno.nomeCompleto} → ${matriculaGerada}`);
+          contador++;
+          corrigidos++;
+        }
+      }
+
+      adicionarLog(`---`);
+      adicionarLog(`🎉 ${corrigidos} aluno(s) corrigido(s).`);
+    } catch (e: any) { adicionarLog(`❌ Erro: ${e.message}`); }
+    finally { setCarregando(false); }
+  };
+
   return (
     <div style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
       <h1 style={{ color: "#1a2a4f" }}>Administração</h1>
@@ -502,6 +541,10 @@ export default function AdminUnificacao() {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         <button onClick={handleUnificar} disabled={carregando} style={{ padding: "10px 16px", background: "#dc3545", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Unificar CPFs</button>
         <button onClick={handleReordenar} disabled={carregando} style={{ padding: "10px 16px", background: "#28a745", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Reordenar Matrículas</button>
+        
+        {/* 👇 NOVO BOTÃO AQUI */}
+        <button onClick={handleCorrigirMatriculasFaltantes} disabled={carregando} style={{ padding: "10px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🩹 Corrigir Matrículas Faltantes</button>
+        
         <button onClick={handleCorrigirCpfs} disabled={carregando} style={{ padding: "10px 16px", background: "#ffc107", color: "#000", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir CPFs</button>
         <button onClick={handlePadronizarTudo} disabled={carregando} style={{ padding: "10px 16px", background: "#17a2b8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Padronizar Tudo</button>
         <button onClick={handleCorrigirGrupos} disabled={carregando} style={{ padding: "10px 16px", background: "#6f42c1", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir Grupos</button>
