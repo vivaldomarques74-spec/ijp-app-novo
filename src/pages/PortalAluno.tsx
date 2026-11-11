@@ -94,6 +94,7 @@ interface CursoMatriculado {
   cargaHoraria?: number;
   dataInicio?: string;
   dataFim?: string;
+  horario?: string; // 👈 ADICIONADO AQUI
   status?: string;
 }
 
@@ -273,6 +274,7 @@ export default function PortalAluno() {
               cargaHoraria: t.cargaHoraria,
               dataInicio: normalizarData(t.dataInicio),
               dataFim: dataFimISO,
+              horario: t.horario || "A definir", // 👈 ADICIONADO AQUI
               status: statusTurma,
             });
           }
@@ -524,7 +526,7 @@ export default function PortalAluno() {
 
   return (
     <div style={estilos.wrapper}>
-      <div style={{ ...estilos.card, maxWidth: 960 }}> {/* 👈 AQUI ESTÁ O 960 QUE VOCÊ PEDIU */}
+      <div style={{ ...estilos.card, maxWidth: 960 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
             <h2 style={{ margin: 0, color: "#1a2a4f" }}>Olá, {aluno.nomeCompleto.split(" ")[0]} 👋</h2>
@@ -615,7 +617,7 @@ export default function PortalAluno() {
           </div>
         )}
 
-        {/* ABA DE CURSOS */}
+        {/* ABA DE CURSOS COM DATA E HORÁRIO */}
         {!carregando && abaAtiva === "cursos" && (
           <div>
             {cursos.length === 0 ? (
@@ -625,8 +627,19 @@ export default function PortalAluno() {
                 <div key={`${c.cursoId}-${c.turmaId}`} style={estilos.item}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, color: "#1a2a4f", fontSize: 16 }}>{c.cursoNome}</div>
-                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>Turma: {c.turmaNome}</div>
+                    <div style={{ fontSize: 13, color: "#6b7a8f", marginTop: 4 }}>
+                      Turma: {c.turmaNome} {c.horario && ` • Horário: ${c.horario}`}
+                    </div>
+                    {(c.dataInicio || c.dataFim) && (
+                      <div style={{ fontSize: 12, color: "#8a99ad", marginTop: 4 }}>
+                        {c.dataInicio && `Início: ${formatarData(c.dataInicio)}`}
+                        {c.dataFim && ` • Término: ${formatarData(c.dataFim)}`}
+                      </div>
+                    )}
                   </div>
+                  <span style={{ padding: "4px 12px", borderRadius: 999, background: "#e6f0ff", color: "#1a2a4f", fontSize: 12, fontWeight: 600 }}>
+                    ativa
+                  </span>
                 </div>
               ))
             )}

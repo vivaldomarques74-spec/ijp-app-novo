@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { doc, getDoc, updateDoc, collection, getDocs, arrayUnion, runTransaction, addDoc, query, where } from "firebase/firestore";
 import { db } from "../services/firebase";
-import { verificarCpfDuplicado } from "../services/validarCpf"; // 👈 Importação restaurada
+import { verificarCpfDuplicado } from "../services/validarCpf";
 
 export default function AlunosEditar() {
   const { id } = useParams<{ id: string }>();
@@ -27,8 +27,6 @@ export default function AlunosEditar() {
 
   const [cursosAtivos, setCursosAtivos] = useState<any[]>([]);
   const [cursosConcluidos, setCursosConcluidos] = useState<any[]>([]);
-
-  // 👇 ESTADOS DO CPF RESTAURADOS
   const [cpfStatus, setCpfStatus] = useState({ mensagem: "", existe: false, verificando: false });
   const cpfTimeoutRef = useRef<number | null>(null);
 
@@ -50,7 +48,6 @@ export default function AlunosEditar() {
         cursos: data.cursos || [],
         servicosAtivos: data.servicosAtivos || [],
       });
-      await carregarHistoricoEAtivos(data.cursos || []);
     }
     
     const cursosSnap = await getDocs(collection(db, "cursos"));
@@ -58,39 +55,62 @@ export default function AlunosEditar() {
     
     const tiposSnap = await getDocs(collection(db, "tiposAtendimento"));
     setTiposAtendimento(tiposSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    
+    // Chama a varredura de turmas
+    await carregarHistoricoEAtivos();
   }
 
-  async function carregarHistoricoEAtivos(cursosDoAluno: any[]) {
+  // 👇 LÓGICA CORRIGIDA E BLINDADA CONTRA ERROS DE NULL
+  async function carregarHistoricoEAtivos() {
+    if (!id) return;
+    
     const ativos: any[] = [];
     const concluidos: any[] = [];
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
 
-    for (const item of cursosDoAluno) {
-      const cursoSnap = await getDoc(doc(db, "cursos", item.cursoId));
-      const turmaSnap = await getDoc(doc(db, "cursos", item.cursoId, "turmas", item.turmaId));
+    const cursosSnap = await getDocs(collection(db, "cursos"));
+
+    for (const cursoDoc of cursosSnap.docs) {
+      const cursoData = cursoDoc.data();
+      const turmasSnap = await getDocs(collection(db, "cursos", cursoDoc.id, "turmas"));
       
-      if (cursoSnap.exists() && turmaSnap.exists()) {
-        const cursoNome = cursoSnap.data().nome;
-        const turmaData = turmaSnap.data();
-        const totalAulas = turmaData.totalAulas || 0;
-        const statusTurma = turmaData.status || "ativa";
+      for (const turmaDoc of turmasSnap.docs) {
+        const t = turmaDoc.data();
+        const alunosArr: string[] = t.alunos || [];
+        
+        if (alunosArr.includes(id)) {
+          const totalAulas = t.totalAulas || 0;
+          const statusTurma = t.status || "ativa";
+          
+          let isHistorico = statusTurma === "encerrada";
+          
+          if (t.dataFim) {
+            const dataFimObj = t.dataFim.toDate ? t.dataFim.toDate() : new Date(t.dataFim);
+            dataFimObj.setHours(0, 0, 0, 0);
+            if (dataFimObj < hoje) {
+              isHistorico = true;
+            }
+          }
 
-        let presencas = 0;
-        if (totalAulas > 0) {
-          const presSnap = await getDocs(query(
-            collection(db, "presencas"),
-            where("alunoId", "==", id),
-            where("cursoId", "==", item.cursoId),
-            where("turmaId", "==", item.turmaId),
-            where("presente", "==", true)
-          ));
-          presencas = presSnap.size;
+          let presencas = 0;
+          if (totalAulas > 0) {
+            const presSnap = await getDocs(query(
+              collection(db, "presencas"),
+              where("alunoId", "==", id),
+              where("cursoId", "==", cursoDoc.id),
+              where("turmaId", "==", turmaDoc.id),
+              where("presente", "==", true)
+            ));
+            presencas = presSnap.size;
+          }
+          const frequencia = totalAulas > 0 ? Math.round((presencas / totalAulas) * 100) : 0;
+
+          const info = { cursoId: cursoDoc.id, cursoNome: cursoData.nome || "Curso", turmaId: turmaDoc.id, turmaNome: t.nome || "Turma", frequencia, totalAulas, presencas, status: statusTurma };
+
+          if (isHistorico) concluidos.push(info);
+          else ativos.push(info);
         }
-        const frequencia = totalAulas > 0 ? Math.round((presencas / totalAulas) * 100) : 0;
-
-        const info = { cursoId: item.cursoId, cursoNome, turmaId: item.turmaId, turmaNome: turmaData.nome, frequencia, totalAulas, presencas, status: statusTurma };
-
-        if (statusTurma === "encerrada") concluidos.push(info);
-        else ativos.push(info);
       }
     }
     setCursosAtivos(ativos);
@@ -122,7 +142,6 @@ export default function AlunosEditar() {
     carregarSenhas();
   }, [novoServicoId]);
 
-  // 👇 LÓGICA DE VERIFICAÇÃO DE CPF RESTAURADA
   useEffect(() => {
     const cpf = dadosAluno.cpf.replace(/\D/g, "");
     if (cpf.length !== 11) {
@@ -134,19 +153,13 @@ export default function AlunosEditar() {
     cpfTimeoutRef.current = setTimeout(async () => {
       try {
         const existe = await verificarCpfDuplicado(cpf, id);
-        setCpfStatus({
-          mensagem: existe ? "⚠️ CPF já cadastrado" : "✅ CPF disponível",
-          existe,
-          verificando: false,
-        });
+        setCpfStatus({ mensagem: existe ? "⚠️ CPF já cadastrado" : "✅ CPF disponível", existe, verificando: false });
       } catch (error) {
         console.error("Erro ao verificar CPF:", error);
         setCpfStatus({ mensagem: "Erro ao verificar CPF", existe: false, verificando: false });
       }
     }, 500);
-    return () => {
-      if (cpfTimeoutRef.current) clearTimeout(cpfTimeoutRef.current);
-    };
+    return () => { if (cpfTimeoutRef.current) clearTimeout(cpfTimeoutRef.current); };
   }, [dadosAluno.cpf, id]);
 
   const adicionarCurso = async () => {
@@ -172,7 +185,7 @@ export default function AlunosEditar() {
       alert("Curso adicionado com sucesso!");
       setNovoCursoId("");
       setNovaTurmaId("");
-      carregarHistoricoEAtivos(novosCursos);
+      carregarHistoricoEAtivos(); 
     } catch (error: any) {
       alert(error.message);
     }
@@ -180,9 +193,7 @@ export default function AlunosEditar() {
 
   const adicionarServico = async () => {
     if (!novoServicoId) return alert("Selecione um serviço");
-    const jaVinculado = dadosAluno.servicosAtivos.some((s: any) => s.tipoId === novoServicoId);
-    if (jaVinculado) return alert("Aluno já está neste serviço");
-
+    if (dadosAluno.servicosAtivos.some((s: any) => s.tipoId === novoServicoId)) return alert("Aluno já está neste serviço");
     setProcessando(true);
     try {
       const servico = tiposAtendimento.find(t => t.id === novoServicoId);
@@ -205,14 +216,8 @@ export default function AlunosEditar() {
       await updateDoc(doc(db, "alunos", id!), { servicosAtivos: novosServicos });
       setDadosAluno({ ...dadosAluno, servicosAtivos: novosServicos });
       alert("Serviço adicionado com sucesso!");
-      setNovoServicoId("");
-      setNovaSenhaId("");
-      setSenhasDisponiveis({});
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setProcessando(false);
-    }
+      setNovoServicoId(""); setNovaSenhaId(""); setSenhasDisponiveis({});
+    } catch (error: any) { alert(error.message); } finally { setProcessando(false); }
   };
 
   const removerServico = async (tipoId: string) => {
@@ -273,14 +278,7 @@ export default function AlunosEditar() {
          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <input placeholder="Nome" value={dadosAluno.nomeCompleto} onChange={handleChange} name="nomeCompleto" style={inputStyle} />
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
-          
-          {/* 👇 MENSAGEM DE VERIFICAÇÃO DE CPF RESTAURADA */}
-          {cpfStatus.mensagem && (
-            <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>
-              {cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}
-            </div>
-          )}
-
+          {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
           <input placeholder="Endereço" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
@@ -299,8 +297,6 @@ export default function AlunosEditar() {
         )}
         <select value={dadosAluno.status} onChange={handleChange} name="status" style={inputStyle}><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
         <textarea placeholder="Observações" value={dadosAluno.observacoes} onChange={handleChange} name="observacoes" style={{ ...inputStyle, minHeight: 60 }} />
-        
-        {/* 👇 BOTÃO SALVAR COM VALIDAÇÃO DE CPF RESTAURADA */}
         <button onClick={salvar} disabled={cpfStatus.existe} style={buttonStyle("primary")}>Salvar Alterações</button>
       </div>
 
@@ -358,7 +354,6 @@ export default function AlunosEditar() {
             </select>
           )}
           {novoServicoId && <button onClick={adicionarServico} disabled={processando} style={buttonStyle("secondary")}>Adicionar Serviço</button>}
-
           <div style={{ marginTop: 16 }}>
             <p style={{ fontSize: 13, color: "#6b7a8f", margin: "0 0 8px", fontWeight: 600 }}>Serviços ativos:</p>
             {dadosAluno.servicosAtivos.map((s: any) => (
