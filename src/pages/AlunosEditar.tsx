@@ -115,6 +115,7 @@ export default function AlunosEditar() {
     setCursosConcluidos(concluidos);
   }
 
+  // 👇 AQUI ESTÁ A CORREÇÃO: Adicionando as tags de (Encerrada) e (Vagas)
   useEffect(() => {
     if (!novoCursoId) { setTurmas([]); setNovaTurmaId(""); return; }
     const carregarTurmas = async () => {
@@ -124,7 +125,18 @@ export default function AlunosEditar() {
         const alunosBruto = data.alunos || [];
         const alunosUnicos = Array.from(new Set(alunosBruto));
         const capacidade = data.vagasTotais || data.totalVagas || data.vagas || data.capacidade || 0;
-        return { id: d.id, ...data, vagasDisponiveis: Math.max(0, capacidade - alunosUnicos.length) };
+        
+        let dataFim = null;
+        if (data.dataFim) {
+          dataFim = data.dataFim.toDate ? data.dataFim.toDate() : new Date(data.dataFim);
+        }
+
+        return { 
+          id: d.id, 
+          ...data, 
+          vagasDisponiveis: Math.max(0, capacidade - alunosUnicos.length),
+          encerrada: dataFim ? dataFim < new Date() : false
+        };
       }));
     };
     carregarTurmas();
@@ -332,9 +344,15 @@ export default function AlunosEditar() {
             <option value="">Curso</option>
             {cursos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
+          
+          {/* 👇 CORREÇÃO AQUI: Agora mostra Encerrada e Vagas */}
           <select value={novaTurmaId} onChange={e => setNovaTurmaId(e.target.value)} disabled={!novoCursoId} style={inputStyle}>
             <option value="">Turma</option>
-            {turmas.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            {turmas.map(t => (
+              <option key={t.id} value={t.id} disabled={t.vagasDisponiveis <= 0 || t.encerrada}>
+                {t.nome} {t.encerrada ? "(Encerrada)" : t.vagasDisponiveis <= 0 ? "(Sem Vagas)" : `(Vagas: ${t.vagasDisponiveis})`}
+              </option>
+            ))}
           </select>
           <button onClick={adicionarCurso} style={buttonStyle("secondary")}>Matricular em Curso</button>
         </div>
