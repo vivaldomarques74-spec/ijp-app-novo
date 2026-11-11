@@ -9,7 +9,8 @@ export default function AlunosEditar() {
   const navigate = useNavigate();
 
   const [dadosAluno, setDadosAluno] = useState<any>({
-    nomeCompleto: "", cpf: "", cep: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
+    nomeCompleto: "", cpf: "", cep: "", endereco: "", numero: "", complemento: "", 
+    email: "", telefone: "", nascimento: "", menor: false,
     responsavelNome: "", responsavelEmail: "", responsavelTelefone: "", responsavelCpf: "",
     status: "ativo", observacoes: "", cursos: [],
     servicosAtivos: [] as any[],
@@ -41,7 +42,8 @@ export default function AlunosEditar() {
     if (alunoSnap.exists()) {
       const data = alunoSnap.data();
       setDadosAluno({
-        nomeCompleto: data.nomeCompleto || "", cpf: data.cpf || "", cep: data.cep || "", endereco: data.endereco || "",
+        nomeCompleto: data.nomeCompleto || "", cpf: data.cpf || "", cep: data.cep || "", 
+        endereco: data.endereco || "", numero: data.numero || "", complemento: data.complemento || "",
         email: data.email || "", telefone: data.telefone || "", nascimento: data.nascimento || "", menor: data.menor || false,
         responsavelNome: data.responsavelNome || "", responsavelEmail: data.responsavelEmail || "",
         responsavelTelefone: data.responsavelTelefone || "", responsavelCpf: data.responsavelCpf || "",
@@ -177,7 +179,6 @@ export default function AlunosEditar() {
     setDadosAluno((prev: any) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
-  // 👇 FUNÇÃO MÁGICA DO CEP
   const buscarCep = async (cep: string) => {
     const cepLimpo = cep.replace(/\D/g, "");
     if (cepLimpo.length !== 8) return;
@@ -299,8 +300,9 @@ export default function AlunosEditar() {
   const salvar = async () => {
     if (cpfStatus.existe) return alert("CPF já cadastrado. Não é possível salvar.");
     await updateDoc(doc(db, "alunos", id!), {
-      nomeCompleto: dadosAluno.nomeCompleto, cpf: dadosAluno.cpf, cep: dadosAluno.cep, endereco: dadosAluno.endereco, email: dadosAluno.email,
-      telefone: dadosAluno.telefone, nascimento: dadosAluno.nascimento, menor: dadosAluno.menor,
+      nomeCompleto: dadosAluno.nomeCompleto, cpf: dadosAluno.cpf, cep: dadosAluno.cep, 
+      endereco: dadosAluno.endereco, numero: dadosAluno.numero, complemento: dadosAluno.complemento,
+      email: dadosAluno.email, telefone: dadosAluno.telefone, nascimento: dadosAluno.nascimento, menor: dadosAluno.menor,
       responsavelNome: dadosAluno.responsavelNome, responsavelEmail: dadosAluno.responsavelEmail,
       responsavelTelefone: dadosAluno.responsavelTelefone, responsavelCpf: dadosAluno.responsavelCpf,
       status: dadosAluno.status, observacoes: dadosAluno.observacoes,
@@ -323,7 +325,7 @@ export default function AlunosEditar() {
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
           {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
           
-          {/* 👇 CAMPO DE CEP NOVO */}
+          {/* 👇 CAMPOS DE ENDEREÇO ESTRUTURADOS */}
           <div style={{ position: "relative" }}>
             <input 
               placeholder="CEP (Ex: 40000-000)" 
@@ -336,7 +338,12 @@ export default function AlunosEditar() {
             {buscandoCep && <span style={{ position: "absolute", right: 10, top: 8, fontSize: 12, color: "#0070f3" }}>Buscando...</span>}
           </div>
           
-          <input placeholder="Endereço (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="Nº" value={dadosAluno.numero} onChange={handleChange} name="numero" style={{ ...inputStyle, width: "30%" }} />
+            <input placeholder="Complemento" value={dadosAluno.complemento} onChange={handleChange} name="complemento" style={{ ...inputStyle, width: "70%" }} />
+          </div>
+
+          <input placeholder="Rua, Bairro, Cidade (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={{ ...inputStyle, gridColumn: "span 2" }} />
           
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />

@@ -8,7 +8,8 @@ export default function AlunosCadastrar() {
   const navigate = useNavigate();
 
   const [dadosAluno, setDadosAluno] = useState({
-    nomeCompleto: "", cpf: "", cep: "", endereco: "", email: "", telefone: "", nascimento: "", menor: false,
+    nomeCompleto: "", cpf: "", cep: "", endereco: "", numero: "", complemento: "", 
+    email: "", telefone: "", nascimento: "", menor: false,
     responsavelNome: "", responsavelEmail: "", responsavelTelefone: "", responsavelCpf: "",
     status: "ativo", observacoes: "",
   });
@@ -185,7 +186,7 @@ export default function AlunosCadastrar() {
           <input placeholder="CPF" value={dadosAluno.cpf} onChange={handleChange} name="cpf" style={inputStyle} />
           {cpfStatus.mensagem && <div style={{ gridColumn: "span 2", color: cpfStatus.existe ? "red" : "green", fontSize: 14, marginBottom: 8 }}>{cpfStatus.verificando ? "Verificando..." : cpfStatus.mensagem}</div>}
 
-          {/* 👇 CAMPO DE CEP NOVO */}
+          {/* 👇 CAMPOS DE CEP, NÚMERO E COMPLEMENTO */}
           <div style={{ position: "relative" }}>
             <input 
               placeholder="CEP (Ex: 40000-000)" 
@@ -197,8 +198,13 @@ export default function AlunosCadastrar() {
             />
             {buscandoCep && <span style={{ position: "absolute", right: 10, top: 10, fontSize: 12, color: "#0070f3" }}>Buscando...</span>}
           </div>
-          
-          <input placeholder="Endereço (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={inputStyle} />
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="Nº" value={dadosAluno.numero} onChange={handleChange} name="numero" style={{ ...inputStyle, width: "30%" }} />
+            <input placeholder="Complemento" value={dadosAluno.complemento} onChange={handleChange} name="complemento" style={{ ...inputStyle, width: "70%" }} />
+          </div>
+
+          <input placeholder="Rua, Bairro, Cidade (preenchido pelo CEP)" value={dadosAluno.endereco} onChange={handleChange} name="endereco" style={{ ...inputStyle, gridColumn: "span 2" }} />
           
           <input placeholder="Email" value={dadosAluno.email} onChange={handleChange} name="email" style={inputStyle} />
           <input placeholder="Telefone" value={dadosAluno.telefone} onChange={handleChange} name="telefone" style={inputStyle} />
