@@ -493,7 +493,7 @@ export default function AdminUnificacao() {
     finally { setCarregando(false); }
   };
 
-  // 👇 NOVA FUNÇÃO: Corrigir apenas quem não tem matrícula
+  // 15. Corrigir apenas quem não tem matrícula
   const handleCorrigirMatriculasFaltantes = async () => {
     if (!confirm("Isso vai preencher a matrícula APENAS dos alunos que estão sem (não vai mexer em quem já tem). Continuar?")) return;
     setCarregando(true); setLogs([]);
@@ -532,19 +532,95 @@ export default function AdminUnificacao() {
     finally { setCarregando(false); }
   };
 
+  // 16. Exportar WhatsApps em CSV
+  const handleBaixarWhatsapps = async () => {
+    setCarregando(true); setLogs([]);
+    try {
+      const snap = await getDocs(collection(db, "alunos"));
+      let csvContent = "Nome;Telefone\n";
+      let contador = 0;
+
+      snap.docs.forEach(doc => {
+        const data = doc.data();
+        const nome = data.nomeCompleto || "";
+        const telefone = data.menor ? data.responsavelTelefone : data.telefone;
+        
+        if (telefone && telefone.trim() !== "") {
+          const limpo = telefone.replace(/\D/g, "");
+          if (limpo.length >= 10) {
+            const nomeLimpo = nome.replace(/;/g, " ");
+            csvContent += `${nomeLimpo};${limpo}\n`;
+            contador++;
+          }
+        }
+      });
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "contatos_whatsapp_ijp.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      adicionarLog(`✅ ${contador} contatos exportados para CSV!`);
+    } catch (e: any) {
+      adicionarLog(`❌ Erro: ${e.message}`);
+    } finally { setCarregando(false); }
+  };
+
+  // 17. Exportar Emails em CSV
+  const handleBaixarEmails = async () => {
+    setCarregando(true); setLogs([]);
+    try {
+      const snap = await getDocs(collection(db, "alunos"));
+      let csvContent = "Nome;Email\n";
+      let contador = 0;
+
+      snap.docs.forEach(doc => {
+        const data = doc.data();
+        const nome = data.nomeCompleto || "";
+        const email = data.menor ? data.responsavelEmail : data.email;
+        
+        if (email && email.trim() !== "" && email.includes("@")) {
+          const nomeLimpo = nome.replace(/;/g, " ");
+          csvContent += `${nomeLimpo};${email.trim()}\n`;
+          contador++;
+        }
+      });
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "contatos_emails_ijp.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      adicionarLog(`✅ ${contador} e-mails exportados para CSV!`);
+    } catch (e: any) {
+      adicionarLog(`❌ Erro: ${e.message}`);
+    } finally { setCarregando(false); }
+  };
+
   return (
     <div style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
       <h1 style={{ color: "#1a2a4f" }}>Administração</h1>
       <p style={{ color: "#6b7a8f" }}>Ferramentas de manutenção.</p>
 
+      <h3 style={{ fontSize: 14, color: "#6b7a8f", marginTop: 20 }}>Contatos em Massa (Exportar CSV)</h3>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+        <button onClick={handleBaixarWhatsapps} disabled={carregando} style={{ padding: "10px 16px", background: "#25D366", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>📱 Baixar WhatsApps (CSV)</button>
+        <button onClick={handleBaixarEmails} disabled={carregando} style={{ padding: "10px 16px", background: "#ea4335", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>📧 Baixar E-mails (CSV)</button>
+      </div>
+
       <h3 style={{ fontSize: 14, color: "#6b7a8f", marginTop: 20 }}>Geral</h3>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         <button onClick={handleUnificar} disabled={carregando} style={{ padding: "10px 16px", background: "#dc3545", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Unificar CPFs</button>
         <button onClick={handleReordenar} disabled={carregando} style={{ padding: "10px 16px", background: "#28a745", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Reordenar Matrículas</button>
-        
-        {/* 👇 NOVO BOTÃO AQUI */}
         <button onClick={handleCorrigirMatriculasFaltantes} disabled={carregando} style={{ padding: "10px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🩹 Corrigir Matrículas Faltantes</button>
-        
         <button onClick={handleCorrigirCpfs} disabled={carregando} style={{ padding: "10px 16px", background: "#ffc107", color: "#000", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir CPFs</button>
         <button onClick={handlePadronizarTudo} disabled={carregando} style={{ padding: "10px 16px", background: "#17a2b8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Padronizar Tudo</button>
         <button onClick={handleCorrigirGrupos} disabled={carregando} style={{ padding: "10px 16px", background: "#6f42c1", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir Grupos</button>

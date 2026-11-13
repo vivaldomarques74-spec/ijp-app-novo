@@ -15,9 +15,8 @@ interface Agendamento {
 
 export default function SaudeFila() {
   const [tipos, setTipos] = useState<any[]>([]);
-  const [tipoId, setTipoId] = useState("");
+  const [tipoId, setTipoId] = useState(""); // Apenas para filtro visual
   const [todosPacientes, setTodosPacientes] = useState<any[]>([]);
-  const [filaExibida, setFilaExibida] = useState<any[]>([]);
   const [profissionais, setProfissionais] = useState<any[]>([]);
   const [horariosPorProfissional, setHorariosPorProfissional] = useState<Record<string, Agendamento[]>>({});
   const [selecoes, setSelecoes] = useState<Record<string, { profissionalId: string; horarioId: string }>>({});
@@ -35,59 +34,40 @@ export default function SaudeFila() {
     carregarProfissionais();
   }, []);
 
-  useEffect(() => {
-    const carregarTodos = async () => {
-      const q = query(collection(db, "filaEspera"), where("status", "in", ["aguardando", "vinculado"]));
-      const snap = await getDocs(q);
-      const lista = [];
-      for (const docFil of snap.docs) {
-        const data = docFil.data();
-        const alunoSnap = await getDoc(doc(db, "alunos", data.alunoId));
-        if (alunoSnap.exists()) {
-          lista.push({
-            id: docFil.id,
-            alunoId: data.alunoId,
-            nome: alunoSnap.data().nomeCompleto,
-            matricula: alunoSnap.data().matricula,
-            tipoId: data.tipoId || "",
-            status: data.status,
-          });
-        }
+  const recarregarTodos = async () => {
+    const q = query(collection(db, "filaEspera"), where("status", "in", ["aguardando", "vinculado"]));
+    const snap = await getDocs(q);
+    const lista = [];
+    for (const docFil of snap.docs) {
+      const data = docFil.data();
+      const alunoSnap = await getDoc(doc(db, "alunos", data.alunoId));
+      if (alunoSnap.exists()) {
+        lista.push({
+          id: docFil.id,
+          alunoId: data.alunoId,
+          nome: alunoSnap.data().nomeCompleto,
+          matricula: alunoSnap.data().matricula,
+          tipoId: data.tipoId || "",
+          status: data.status,
+        });
       }
-      lista.sort((a, b) => {
-        const numA = parseInt(a.matricula.replace(/\D/g, "")) || 0;
-        const numB = parseInt(b.matricula.replace(/\D/g, "")) || 0;
-        return numA - numB;
-      });
-      setTodosPacientes(lista);
-    };
-    carregarTodos();
+    }
+    lista.sort((a, b) => {
+      const numA = parseInt(a.matricula?.replace(/\D/g, "") || "0");
+      const numB = parseInt(b.matricula?.replace(/\D/g, "") || "0");
+      return numA - numB;
+    });
+    setTodosPacientes(lista);
+    
+    const novasSelecoes: Record<string, any> = {};
+    for (const p of lista) novasSelecoes[p.alunoId] = { profissionalId: "", horarioId: "" };
+    setSelecoes(novasSelecoes);
+  };
+
+  useEffect(() => {
+    recarregarTodos();
   }, []);
 
-  useEffect(() => {
-    if (todosPacientes.length === 0) { setFilaExibida([]); return; }
-    if (!tipoId) {
-      setFilaExibida(todosPacientes);
-      const novasSelecoes: Record<string, any> = {};
-      for (const p of todosPacientes) novasSelecoes[p.alunoId] = { profissionalId: "", horarioId: "" };
-      setSelecoes(novasSelecoes);
-      return;
-    }
-    const servicoSelecionado = tipos.find(t => t.id === tipoId);
-    if (!servicoSelecionado) { setFilaExibida([]); return; }
-    const nomeServico = (servicoSelecionado.nome || "").toLowerCase().trim();
-    const idServico = tipoId.toLowerCase().trim();
-    const filtrados = todosPacientes.filter(p => {
-      const tipoIdPaciente = (p.tipoId || "").toString().toLowerCase().trim();
-      return tipoIdPaciente === idServico || tipoIdPaciente === nomeServico;
-    });
-    setFilaExibida(filtrados);
-    const novasSelecoes: Record<string, any> = {};
-    for (const p of filtrados) novasSelecoes[p.alunoId] = { profissionalId: "", horarioId: "" };
-    setSelecoes(novasSelecoes);
-  }, [tipoId, todosPacientes, tipos]);
-
-  // ✅ AGRUPAMENTO CORRETO: cada grupo fixo aparece como UMA opção (a primeira data)
   useEffect(() => {
     const carregarHorarios = async () => {
       const hoje = new Date().toISOString().split("T")[0];
@@ -114,7 +94,6 @@ export default function SaudeFila() {
         const horariosDoProf = todos.filter(h => h.profissionalId === prof.id);
         const fixos = horariosDoProf.filter(h => h.groupId);
         const avulsos = horariosDoProf.filter(h => !h.groupId);
-        // Agrupa fixos por groupId e pega a data mais próxima
         const grupos = new Map<string, Agendamento>();
         for (const fixo of fixos) {
           if (!grupos.has(fixo.groupId!) || fixo.data < grupos.get(fixo.groupId!)!.data) {
@@ -134,32 +113,6 @@ export default function SaudeFila() {
     if (profissionais.length > 0) carregarHorarios();
   }, [profissionais]);
 
-  const recarregarTodos = async () => {
-    const q = query(collection(db, "filaEspera"), where("status", "in", ["aguardando", "vinculado"]));
-    const snap = await getDocs(q);
-    const lista = [];
-    for (const docFil of snap.docs) {
-      const data = docFil.data();
-      const alunoSnap = await getDoc(doc(db, "alunos", data.alunoId));
-      if (alunoSnap.exists()) {
-        lista.push({
-          id: docFil.id,
-          alunoId: data.alunoId,
-          nome: alunoSnap.data().nomeCompleto,
-          matricula: alunoSnap.data().matricula,
-          tipoId: data.tipoId || "",
-          status: data.status,
-        });
-      }
-    }
-    lista.sort((a, b) => {
-      const numA = parseInt(a.matricula.replace(/\D/g, "")) || 0;
-      const numB = parseInt(b.matricula.replace(/\D/g, "")) || 0;
-      return numA - numB;
-    });
-    setTodosPacientes(lista);
-  };
-
   const vincular = async (alunoId: string) => {
     const selecao = selecoes[alunoId];
     if (!selecao.profissionalId) return alert("Selecione um profissional");
@@ -170,7 +123,6 @@ export default function SaudeFila() {
     const horarioData = horarioSnap.data() as Agendamento;
 
     try {
-      // ✅ Se for grupo fixo, atualiza TODAS as ocorrências do grupo
       if (horarioData?.groupId) {
         const groupQuery = query(collection(db, "agendamentos"), where("groupId", "==", horarioData.groupId));
         const groupSnap = await getDocs(groupQuery);
@@ -182,8 +134,7 @@ export default function SaudeFila() {
         await updateDoc(horarioRef, { alunoId, status: "ocupado" });
         alert("Paciente vinculado ao horário.");
       }
-
-      const filaDoc = filaExibida.find(f => f.alunoId === alunoId);
+      const filaDoc = todosPacientes.find(f => f.alunoId === alunoId);
       if (filaDoc) await updateDoc(doc(db, "filaEspera", filaDoc.id), { status: "atendido" });
       recarregarTodos();
     } catch (error: any) {
@@ -193,7 +144,7 @@ export default function SaudeFila() {
 
   const removerDaFila = async (alunoId: string, nome: string) => {
     if (window.confirm(`Remover ${nome} da fila de espera?`)) {
-      const filaDoc = filaExibida.find(f => f.alunoId === alunoId);
+      const filaDoc = todosPacientes.find(f => f.alunoId === alunoId);
       if (filaDoc) {
         await updateDoc(doc(db, "filaEspera", filaDoc.id), { status: "cancelado" });
         alert("Paciente removido da fila.");
@@ -213,43 +164,76 @@ export default function SaudeFila() {
 
   const selectStyle = { padding: 6, border: "1px solid #ccc", borderRadius: 6, background: "#fff", width: "100%" };
 
+  // 👇 Filtro visual: Se tipoId estiver vazio, mostra todos. Se não, mostra apenas os daquele tipo.
+  const pacientesExibidos = todosPacientes.filter(p => {
+    if (!tipoId) return true;
+    return p.tipoId === tipoId;
+  });
+
   return (
     <div>
-      <h3 style={{ fontSize: 16, margin: "0 0 12px", color: "#1a2a4f" }}>Fila de Espera (Agendados)</h3>
-      <select onChange={e => setTipoId(e.target.value)} value={tipoId} style={{ padding: 8, border: "1px solid #ccc", borderRadius: 8, marginBottom: 16 }}>
-        <option value="">Todos os serviços</option>
-        {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-      </select>
-      {filaExibida.length === 0 && <p>Nenhum paciente aguardando ou vinculado.</p>}
-      {filaExibida.map(paciente => (
-        <div key={paciente.alunoId} style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <div style={{ flex: "1 1 180px" }}>
-              <strong>{paciente.nome}</strong> <span style={{ fontSize: 13, color: "#6b7a8f" }}>({paciente.matricula})</span>
-            </div>
-            <div style={{ flex: "1 1 140px" }}>
-              <select value={selecoes[paciente.alunoId]?.profissionalId || ""} onChange={e => atualizarSelecao(paciente.alunoId, "profissionalId", e.target.value)} style={selectStyle}>
-                <option value="">Profissional</option>
-                {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: "1 1 200px" }}>
-              <select value={selecoes[paciente.alunoId]?.horarioId || ""} onChange={e => atualizarSelecao(paciente.alunoId, "horarioId", e.target.value)} disabled={!selecoes[paciente.alunoId]?.profissionalId} style={selectStyle}>
-                <option value="">Horário</option>
-                {selecoes[paciente.alunoId]?.profissionalId && horariosPorProfissional[selecoes[paciente.alunoId].profissionalId]?.map(h => (
-                  <option key={h.id} value={h.id}>
-                    {formatarData(h.data)} {h.horario} {h.groupId ? "(fixo - todas as semanas)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => vincular(paciente.alunoId)} style={{ background: "#28a745", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}>Vincular</button>
-              <button onClick={() => removerDaFila(paciente.alunoId, paciente.nome)} style={{ background: "#dc3545", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}>Remover</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ fontSize: 16, margin: 0, color: "#1a2a4f" }}>Fila de Espera (Todos os Serviços)</h3>
+        <select onChange={e => setTipoId(e.target.value)} value={tipoId} style={{ padding: 8, border: "1px solid #ccc", borderRadius: 8 }}>
+          <option value="">Mostrar Todos</option>
+          {tipos.map(t => <option key={t.id} value={t.id}>Apenas {t.nome}</option>)}
+        </select>
+      </div>
+
+      {pacientesExibidos.length === 0 && <p>Nenhum paciente aguardando ou vinculado.</p>}
+      
+      {pacientesExibidos.map(paciente => {
+        // 👇 Pega o nome da especialidade para mostrar ao lado do nome
+        const servico = tipos.find(t => t.id === paciente.tipoId);
+        const nomeServico = servico?.nome || "Geral";
+        
+        return (
+          <div key={paciente.alunoId} style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              
+              <div style={{ flex: "1 1 220px" }}>
+                <strong>{paciente.nome}</strong> 
+                <span style={{ fontSize: 13, color: "#6b7a8f", marginLeft: 6 }}>({paciente.matricula})</span>
+                
+                {/* 👇 BADGE COM O NOME DA ESPECIALIDADE */}
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    background: nomeServico.toLowerCase().includes("psico") ? "#e0cffc" : "#d1f2e5", 
+                    color: nomeServico.toLowerCase().includes("psico") ? "#5a1e9e" : "#0b5e3b",
+                    padding: "2px 8px", 
+                    borderRadius: 4 
+                  }}>
+                    {nomeServico}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ flex: "1 1 140px" }}>
+                <select value={selecoes[paciente.alunoId]?.profissionalId || ""} onChange={e => atualizarSelecao(paciente.alunoId, "profissionalId", e.target.value)} style={selectStyle}>
+                  <option value="">Profissional</option>
+                  {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: "1 1 200px" }}>
+                <select value={selecoes[paciente.alunoId]?.horarioId || ""} onChange={e => atualizarSelecao(paciente.alunoId, "horarioId", e.target.value)} disabled={!selecoes[paciente.alunoId]?.profissionalId} style={selectStyle}>
+                  <option value="">Horário</option>
+                  {selecoes[paciente.alunoId]?.profissionalId && horariosPorProfissional[selecoes[paciente.alunoId].profissionalId]?.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {formatarData(h.data)} {h.horario} {h.groupId ? "(fixo)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => vincular(paciente.alunoId)} style={{ background: "#28a745", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}>Vincular</button>
+                <button onClick={() => removerDaFila(paciente.alunoId, paciente.nome)} style={{ background: "#dc3545", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}>Remover</button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
