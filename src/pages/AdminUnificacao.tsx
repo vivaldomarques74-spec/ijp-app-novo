@@ -532,12 +532,12 @@ export default function AdminUnificacao() {
     finally { setCarregando(false); }
   };
 
-  // 16. Exportar WhatsApps em CSV
+  // 16. Exportar WhatsApps em CSV (CORRIGIDO PARA E-GOI)
   const handleBaixarWhatsapps = async () => {
     setCarregando(true); setLogs([]);
     try {
       const snap = await getDocs(collection(db, "alunos"));
-      let csvContent = "Nome;Telefone\n";
+      let csvContent = "Nome,Telefone\n";
       let contador = 0;
 
       snap.docs.forEach(doc => {
@@ -548,8 +548,9 @@ export default function AdminUnificacao() {
         if (telefone && telefone.trim() !== "") {
           const limpo = telefone.replace(/\D/g, "");
           if (limpo.length >= 10) {
-            const nomeLimpo = nome.replace(/;/g, " ");
-            csvContent += `${nomeLimpo};${limpo}\n`;
+            const nomeLimpo = nome.replace(/,/g, " ");
+            // 👇 ADICIONA O +55 NA FRENTE DO NÚMERO
+            csvContent += `${nomeLimpo},+55${limpo}\n`;
             contador++;
           }
         }
@@ -570,12 +571,12 @@ export default function AdminUnificacao() {
     } finally { setCarregando(false); }
   };
 
-  // 17. Exportar Emails em CSV
+  // 17. Exportar Emails em CSV (CORRIGIDO PARA E-GOI)
   const handleBaixarEmails = async () => {
     setCarregando(true); setLogs([]);
     try {
       const snap = await getDocs(collection(db, "alunos"));
-      let csvContent = "Nome;Email\n";
+      let csvContent = "Nome,Email\n";
       let contador = 0;
 
       snap.docs.forEach(doc => {
@@ -584,8 +585,8 @@ export default function AdminUnificacao() {
         const email = data.menor ? data.responsavelEmail : data.email;
         
         if (email && email.trim() !== "" && email.includes("@")) {
-          const nomeLimpo = nome.replace(/;/g, " ");
-          csvContent += `${nomeLimpo};${email.trim()}\n`;
+          const nomeLimpo = nome.replace(/,/g, " ");
+          csvContent += `${nomeLimpo},${email.trim()}\n`;
           contador++;
         }
       });
@@ -623,39 +624,4 @@ export default function AdminUnificacao() {
         <button onClick={handleCorrigirMatriculasFaltantes} disabled={carregando} style={{ padding: "10px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🩹 Corrigir Matrículas Faltantes</button>
         <button onClick={handleCorrigirCpfs} disabled={carregando} style={{ padding: "10px 16px", background: "#ffc107", color: "#000", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir CPFs</button>
         <button onClick={handlePadronizarTudo} disabled={carregando} style={{ padding: "10px 16px", background: "#17a2b8", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Padronizar Tudo</button>
-        <button onClick={handleCorrigirGrupos} disabled={carregando} style={{ padding: "10px 16px", background: "#6f42c1", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Corrigir Grupos</button>
-        <button onClick={handleCorrigirVagasTurmas} disabled={carregando} style={{ padding: "10px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🎫 Corrigir Vagas de Turmas</button>
-        <button onClick={handleDiagnosticarTurmas} disabled={carregando} style={{ padding: "10px 16px", background: "#20c997", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🔍 Diagnosticar Turmas</button>
-        <button onClick={handleLimparTurmas} disabled={carregando} style={{ padding: "10px 16px", background: "#ff6b6b", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🔧 Limpar Turmas</button>
-      </div>
-
-      <h3 style={{ fontSize: 14, color: "#6b7a8f", marginTop: 20 }}>Profissionais</h3>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        <button onClick={handleCorrigirCodigosProfissionais} disabled={carregando} style={{ padding: "10px 16px", background: "#e83e8c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
-          🔢 Corrigir Códigos Duplicados
-        </button>
-      </div>
-
-      <h3 style={{ fontSize: 14, color: "#6b7a8f", marginTop: 20 }}>Presenças</h3>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        <button onClick={handleCorrigirPresencasDuplicadas} disabled={carregando} style={{ padding: "10px 16px", background: "#fd7e14", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🗑️ Corrigir Presenças Duplicadas</button>
-        <button onClick={handleAjustarPresencasAluno} disabled={carregando} style={{ padding: "10px 16px", background: "#e83e8c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🎯 Ajustar Presenças de um Aluno</button>
-      </div>
-
-      <h3 style={{ fontSize: 14, color: "#6b7a8f", marginTop: 20 }}>Prontuários Antigos</h3>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        <button onClick={handleListarProntuariosAntigos} disabled={carregando} style={{ padding: "10px 16px", background: "#20c997", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>📋 Listar Antigos</button>
-        <button onClick={() => handleMigrarProntuario("psicologia")} disabled={carregando} style={{ padding: "10px 16px", background: "#6610f2", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🧠 Migrar para PSI</button>
-        <button onClick={() => handleMigrarProntuario("nutrição")} disabled={carregando} style={{ padding: "10px 16px", background: "#fd7e14", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🍎 Migrar para NUTRI</button>
-        <button onClick={handleDeletarAntigos} disabled={carregando} style={{ padding: "10px 16px", background: "#000", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🗑️ Deletar Antigos</button>
-      </div>
-
-      <div style={{ background: "#f8f9fa", padding: 16, borderRadius: 8, maxHeight: 500, overflow: "auto", border: "1px solid #dee2e6" }}>
-        {logs.length === 0 && <span style={{ color: "#6b7a8f" }}>Nenhum log ainda.</span>}
-        {logs.map((log, i) => (
-          <div key={i} style={{ fontFamily: "monospace", fontSize: 12, padding: 2, wordBreak: "break-all" }}>{log}</div>
-        ))}
-      </div>
-    </div>
-  );
-}
+        <button onClick={handleCorrigirGrupos} disabled={carregando} style={{ padding: "
